@@ -1,0 +1,16 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Java
+**/target/
+*.log
+
+# Flutter
+.dart_tool/
+build/
+
+# OS
+Thumbs.db
+.DS_Store
