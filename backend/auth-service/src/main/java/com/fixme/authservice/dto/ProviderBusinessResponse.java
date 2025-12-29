@@ -15,4 +15,6 @@ public class ProviderBusinessResponse {
     private String description;
     private String services;
     private String openingHours;
+    private Double latitude;
+    private Double longitude;
 }

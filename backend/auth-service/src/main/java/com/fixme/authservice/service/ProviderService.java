@@ -45,6 +45,12 @@ public class ProviderService {
         business.setOpeningHours(request.getOpeningHours());
         business.setUpdatedAt(LocalDateTime.now());
 
+        // ✅ NEW: location (optional for now)
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            business.setLatitude(request.getLatitude());
+            business.setLongitude(request.getLongitude());
+        }
+
         ProviderBusiness saved = businessRepository.save(business);
 
         return ProviderBusinessResponse.builder()
@@ -56,6 +62,8 @@ public class ProviderService {
                 .description(saved.getDescription())
                 .services(saved.getServices())
                 .openingHours(saved.getOpeningHours())
+                .latitude(saved.getLatitude())
+                .longitude(saved.getLongitude())
                 .build();
     }
 
@@ -73,6 +81,8 @@ public class ProviderService {
                 .description(business.getDescription())
                 .services(business.getServices())
                 .openingHours(business.getOpeningHours())
+                .latitude(business.getLatitude())
+                .longitude(business.getLongitude())
                 .build();
     }
 }

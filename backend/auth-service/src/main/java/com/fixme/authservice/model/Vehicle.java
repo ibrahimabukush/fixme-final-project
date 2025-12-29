@@ -29,6 +29,8 @@ public class Vehicle {
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+    @Enumerated(EnumType.STRING)
+    private VehicleCategory vehicleCategory = VehicleCategory.ALL;
 
     public Vehicle() {
     }
@@ -80,5 +82,11 @@ public class Vehicle {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+    public void setVehicleCategory(VehicleCategory vehicleCategory) {
+        this.vehicleCategory = vehicleCategory;
+    }
+    public VehicleCategory getVehicleCategory() {
+        return vehicleCategory;
     }
 }

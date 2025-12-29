@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import 'profile_screen.dart';
 import 'provider_business_screen.dart';
+import 'provider_nearby_requests_screen.dart';
 
 class ProviderHomeScreen extends StatelessWidget {
   final int userId;
@@ -26,6 +27,15 @@ class ProviderHomeScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (_) => ProviderBusinessScreen(userId: userId),
+      ),
+    );
+  }
+
+  void _openNearbyRequests(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderNearbyRequestsScreen(userId: userId),
       ),
     );
   }
@@ -157,7 +167,6 @@ class ProviderHomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // Modern background
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -185,17 +194,16 @@ class ProviderHomeScreen extends StatelessWidget {
                         onTap: () => _openBusinessProfile(context),
                       ),
                       const SizedBox(height: 10),
+
+                      // ✅ UPDATED
                       _actionCard(
                         context: context,
-                        title: "Requests (Coming Soon)",
-                        subtitle: "View and accept customer requests",
+                        title: "Nearby Requests",
+                        subtitle: "View requests near your location",
                         icon: Icons.assignment_outlined,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Requests screen is coming soon.")),
-                          );
-                        },
+                        onTap: () => _openNearbyRequests(context),
                       ),
+
                       const SizedBox(height: 10),
                       _actionCard(
                         context: context,

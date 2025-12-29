@@ -27,16 +27,21 @@ public class ProviderBusiness {
     private String businessName;      // اسم الكراج / البزنس
 
     @Column(nullable = false)
-    private String city;              // المدينة
+    private String city;              // المدينة (نتركها زي ما هي)
 
     @Column(nullable = false)
-    private String address;           // العنوان التفصيلي
+    private String address;           // العنوان التفصيلي (نتركها زي ما هي)
 
     private String description;       // وصف قصير
-
     private String services;          // مثلاً "Towing, Tires, Garage"
-
     private String openingHours;      // مثلاً "Sun-Thu 09:00-18:00"
+
+    // ✅ NEW: provider location
+    @Column(nullable = true)
+    private Double latitude;
+
+    @Column(nullable = true)
+    private Double longitude;
 
     @Column(nullable = false)
     private LocalDateTime createdAt;

@@ -2,7 +2,7 @@ package com.fixme.authservice.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-
+import com.fixme.authservice.model.VehicleCategory;
 public class VehicleRequest {
 
     @NotBlank
@@ -16,6 +16,7 @@ public class VehicleRequest {
 
     @NotNull
     private Integer year;
+    private VehicleCategory vehicleCategory;
 
     // ====== Getters & Setters ======
     public String getPlateNumber() {
@@ -48,5 +49,12 @@ public class VehicleRequest {
 
     public void setYear(Integer year) {
         this.year = year;
+    }
+    public VehicleCategory getVehicleCategory() {
+        return vehicleCategory;
+    }
+
+    public void setVehicleCategory(VehicleCategory vehicleCategory) {
+        this.vehicleCategory = vehicleCategory;
     }
 }

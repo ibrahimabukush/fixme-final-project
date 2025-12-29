@@ -1,27 +1,30 @@
 import 'package:flutter/material.dart';
+import '../models/vehicle.dart';
 import '../services/vehicle_service.dart';
-import 'customer_home_screen.dart';
 
-class AddCarScreen extends StatefulWidget {
+class EditCarScreen extends StatefulWidget {
   final int userId;
+  final Vehicle vehicle;
 
-  const AddCarScreen({super.key, required this.userId});
+  const EditCarScreen({
+    super.key,
+    required this.userId,
+    required this.vehicle,
+  });
 
   @override
-  State<AddCarScreen> createState() => _AddCarScreenState();
+  State<EditCarScreen> createState() => _EditCarScreenState();
 }
 
-class _AddCarScreenState extends State<AddCarScreen> {
+class _EditCarScreenState extends State<EditCarScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _plateCtrl = TextEditingController();
-  final _makeCtrl = TextEditingController();
-  final _modelCtrl = TextEditingController();
-  final _yearCtrl = TextEditingController();
+  late final TextEditingController _plateCtrl;
+  late final TextEditingController _makeCtrl;
+  late final TextEditingController _modelCtrl;
+  late final TextEditingController _yearCtrl;
 
   bool _isLoading = false;
 
-  // ✅ نفس enum في الـ backend (authservice)
-  // VehicleCategory: ALL, GERMAN, JAPANESE, KOREAN, AMERICAN, ELECTRIC
   final Map<String, String> _categoryLabels = const {
     'ALL': 'All',
     'GERMAN': 'German',
@@ -31,7 +34,18 @@ class _AddCarScreenState extends State<AddCarScreen> {
     'ELECTRIC': 'Electric',
   };
 
-  String? _selectedCategory; // رح نخلي الافتراضي ALL لو null
+  String? _selectedCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    _plateCtrl = TextEditingController(text: widget.vehicle.plateNumber);
+    _makeCtrl = TextEditingController(text: widget.vehicle.make);
+    _modelCtrl = TextEditingController(text: widget.vehicle.model);
+    _yearCtrl =
+        TextEditingController(text: (widget.vehicle.year ?? '').toString());
+    _selectedCategory = widget.vehicle.vehicleCategory;
+  }
 
   @override
   void dispose() {
@@ -55,19 +69,18 @@ class _AddCarScreenState extends State<AddCarScreen> {
     );
   }
 
-  Future<void> _submit() async {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
       final year = int.parse(_yearCtrl.text.trim());
-
-      // ✅ لو ما اختار، خليه ALL
       final category = _selectedCategory ?? 'ALL';
 
-      await VehicleService.addVehicle(
+      await VehicleService.updateVehicle(
         widget.userId,
+        widget.vehicle.id,
         _plateCtrl.text.trim(),
         _makeCtrl.text.trim(),
         _modelCtrl.text.trim(),
@@ -78,19 +91,59 @@ class _AddCarScreenState extends State<AddCarScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Car added successfully ✅')),
+        const SnackBar(content: Text('Car updated successfully ✅')),
       );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => CustomerHomeScreen(userId: widget.userId),
-        ),
-      );
+      Navigator.pop(context, true); // رجّع true عشان نعمل reload
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to add car: $e')),
+        SnackBar(content: Text('Failed to update car: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _deleteCar() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete car"),
+        content: Text(
+          "Delete ${widget.vehicle.make} ${widget.vehicle.model} (${widget.vehicle.plateNumber}) ?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await VehicleService.deleteVehicle(widget.userId, widget.vehicle.id);
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Car deleted ✅')),
+      );
+
+      Navigator.pop(context, true); // عشان Home يعمل reload
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete car: $e')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -148,7 +201,7 @@ class _AddCarScreenState extends State<AddCarScreen> {
                                 color: const Color(0xFFEEF2FF),
                               ),
                               child: const Icon(
-                                Icons.directions_car_filled_outlined,
+                                Icons.edit_outlined,
                                 color: Color(0xFF4F46E5),
                               ),
                             ),
@@ -158,7 +211,7 @@ class _AddCarScreenState extends State<AddCarScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    "Add a car",
+                                    "Edit car",
                                     style: TextStyle(
                                       fontSize: 16.5,
                                       fontWeight: FontWeight.w800,
@@ -166,7 +219,7 @@ class _AddCarScreenState extends State<AddCarScreen> {
                                   ),
                                   SizedBox(height: 2),
                                   Text(
-                                    "FixMe • Customer garage",
+                                    "Update car info",
                                     style: TextStyle(
                                       fontSize: 12.5,
                                       color: Colors.black54,
@@ -176,16 +229,7 @@ class _AddCarScreenState extends State<AddCarScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => CustomerHomeScreen(
-                                      userId: widget.userId,
-                                    ),
-                                  ),
-                                );
-                              },
+                              onPressed: () => Navigator.pop(context, false),
                               child: const Text("Back"),
                             ),
                           ],
@@ -197,12 +241,10 @@ class _AddCarScreenState extends State<AddCarScreen> {
                           decoration: _dec(
                             label: 'Plate number',
                             icon: Icons.confirmation_number_outlined,
-                            hint: 'e.g. 12-345-67',
                           ),
                           validator: (v) => (v == null || v.trim().isEmpty)
                               ? 'Plate number is required'
                               : null,
-                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
 
@@ -211,12 +253,10 @@ class _AddCarScreenState extends State<AddCarScreen> {
                           decoration: _dec(
                             label: 'Make',
                             icon: Icons.factory_outlined,
-                            hint: 'e.g. Toyota',
                           ),
                           validator: (v) => (v == null || v.trim().isEmpty)
                               ? 'Make is required'
                               : null,
-                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
 
@@ -225,12 +265,10 @@ class _AddCarScreenState extends State<AddCarScreen> {
                           decoration: _dec(
                             label: 'Model',
                             icon: Icons.directions_car_outlined,
-                            hint: 'e.g. Corolla',
                           ),
                           validator: (v) => (v == null || v.trim().isEmpty)
                               ? 'Model is required'
                               : null,
-                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
 
@@ -239,7 +277,6 @@ class _AddCarScreenState extends State<AddCarScreen> {
                           decoration: _dec(
                             label: 'Year',
                             icon: Icons.calendar_month_outlined,
-                            hint: 'e.g. 2020',
                           ),
                           keyboardType: TextInputType.number,
                           validator: (v) {
@@ -252,13 +289,10 @@ class _AddCarScreenState extends State<AddCarScreen> {
                             }
                             return null;
                           },
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _submit(),
+                          onFieldSubmitted: (_) => _save(),
                         ),
-
                         const SizedBox(height: 12),
 
-                        // ✅ Dropdown للفئات حسب enum
                         DropdownButtonFormField<String>(
                           value: _selectedCategory,
                           decoration: _dec(
@@ -267,14 +301,12 @@ class _AddCarScreenState extends State<AddCarScreen> {
                           ),
                           items: _categoryLabels.entries.map((e) {
                             return DropdownMenuItem<String>(
-                              value: e.key,        // القيمة اللي تروح للـ backend
-                              child: Text(e.value), // اللي يظهر للمستخدم
+                              value: e.key,
+                              child: Text(e.value),
                             );
                           }).toList(),
-                          onChanged: (val) {
-                            setState(() => _selectedCategory = val);
-                          },
-                          // إذا بدك تجبره يختار، خليها validator. إذا مش مهم، احذف validator.
+                          onChanged: (val) =>
+                              setState(() => _selectedCategory = val),
                           validator: (val) =>
                               val == null ? 'Category is required' : null,
                         ),
@@ -286,7 +318,7 @@ class _AddCarScreenState extends State<AddCarScreen> {
                           child: _isLoading
                               ? const Center(child: CircularProgressIndicator())
                               : ElevatedButton(
-                                  onPressed: _submit,
+                                  onPressed: _save,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF4F46E5),
                                     foregroundColor: Colors.white,
@@ -295,10 +327,32 @@ class _AddCarScreenState extends State<AddCarScreen> {
                                     ),
                                   ),
                                   child: const Text(
-                                    'Save car',
-                                    style: TextStyle(fontWeight: FontWeight.w800),
+                                    'Save changes',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.w800),
                                   ),
                                 ),
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        SizedBox(
+                          height: 46,
+                          child: OutlinedButton.icon(
+                            onPressed: _isLoading ? null : _deleteCar,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text(
+                              'Delete car',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),

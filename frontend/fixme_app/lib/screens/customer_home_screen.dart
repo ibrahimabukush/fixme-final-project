@@ -4,6 +4,9 @@ import '../services/vehicle_service.dart';
 import '../services/auth_service.dart';
 import 'add_car_screen.dart';
 import 'profile_screen.dart';
+import 'edit_car_screen.dart';
+import 'create_request_screen.dart';
+import 'my_requests_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
   final int userId;
@@ -47,11 +50,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  void _goToMyRequests() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MyRequestsScreen(userId: widget.userId),
+      ),
+    );
+  }
+
   Future<void> _logout() async {
     await AuthService.logout();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }
+
+  // ================= EMPTY STATE =================
 
   Widget _emptyState() {
     return Center(
@@ -126,6 +140,46 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     );
   }
 
+  // ================= VEHICLE CARD =================
+
+  Future<void> _deleteCar(Vehicle v) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Delete car"),
+        content: Text("Delete ${v.make} ${v.model} (${v.plateNumber}) ?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await VehicleService.deleteVehicle(widget.userId, v.id);
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Car deleted ✅")),
+      );
+
+      _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to delete car: $e")),
+      );
+    }
+  }
+
   Widget _vehicleCard(Vehicle v) {
     return Material(
       elevation: 6,
@@ -158,23 +212,62 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(
-              "Plate: ${v.plateNumber}   •   Year: ${v.year}",
+              "Plate: ${v.plateNumber}   •   Year: ${v.year ?? '-'}",
               style: const TextStyle(color: Colors.black54),
             ),
           ),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () {
-            // لاحقاً: افتح صفحة تفاصيل السيارة / طلب خدمة / صيانة
+
+          // ✅ Request + Delete + Chevron
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextButton(
+                onPressed: () async {
+                  final ok = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateRequestScreen(
+                        userId: widget.userId,
+                        vehicle: v,
+                      ),
+                    ),
+                  );
+                  // لو رجع true (تم ارسال الطلب) مش لازم reload سيارات
+                  if (ok == true) {
+                    // optional: show something or keep silent
+                  }
+                },
+                child: const Text("Request"),
+              ),
+              IconButton(
+                tooltip: "Delete",
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => _deleteCar(v),
+              ),
+              const Icon(Icons.chevron_right),
+            ],
+          ),
+
+          // ✅ Edit on tap
+          onTap: () async {
+            final changed = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EditCarScreen(userId: widget.userId, vehicle: v),
+              ),
+            );
+            if (changed == true) _reload();
           },
         ),
       ),
     );
   }
 
+  // ================= BUILD =================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // خلفية مودرن
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -189,7 +282,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // AppBar مودرن (بدون AppBar الرسمي عشان شكل أجمل)
+              // ================= TOP BAR =================
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
                 child: Material(
@@ -234,19 +327,27 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                             ],
                           ),
                         ),
+
+                        // ✅ My Requests
+                        IconButton(
+                          onPressed: _goToMyRequests,
+                          tooltip: "My Requests",
+                          icon: const Icon(Icons.receipt_long),
+                        ),
+
                         IconButton(
                           onPressed: _goToProfile,
-                          tooltip: 'Profile',
+                          tooltip: "Profile",
                           icon: const Icon(Icons.person_outline),
                         ),
                         IconButton(
                           onPressed: _reload,
-                          tooltip: 'Refresh',
+                          tooltip: "Refresh",
                           icon: const Icon(Icons.refresh),
                         ),
                         IconButton(
                           onPressed: _logout,
-                          tooltip: 'Logout',
+                          tooltip: "Logout",
                           icon: const Icon(Icons.logout),
                         ),
                       ],
@@ -255,7 +356,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
               ),
 
-              // المحتوى
+              // ================= CONTENT =================
               Expanded(
                 child: FutureBuilder<List<Vehicle>>(
                   future: _vehiclesFuture,
@@ -263,6 +364,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
+
                     if (snapshot.hasError) {
                       return Center(
                         child: Padding(
@@ -295,7 +397,6 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         ),
       ),
 
-      // زر إضافة مودرن
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _goToAddCar,
         backgroundColor: const Color(0xFF4F46E5),
