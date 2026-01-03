@@ -50,7 +50,7 @@ public class SecurityConfig {
         // خلال التطوير: نسمح لكل Origins (Flutter dev server وغيره)
         config.setAllowedOriginPatterns(List.of("*"));
         // الميثودز المسموحة
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT","PATCH", "DELETE", "OPTIONS"));
         // الهيدرز المسموحة
         config.setAllowedHeaders(List.of("*"));
         // إحنا مش بنستعمل Cookies حالياً، فخليها false

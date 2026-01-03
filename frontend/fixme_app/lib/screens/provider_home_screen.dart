@@ -4,6 +4,8 @@ import '../services/auth_service.dart';
 import 'profile_screen.dart';
 import 'provider_business_screen.dart';
 import 'provider_nearby_requests_screen.dart';
+import 'provider_jobs_screen.dart';
+import 'provider_history_screen.dart';
 
 class ProviderHomeScreen extends StatelessWidget {
   final int userId;
@@ -36,6 +38,25 @@ class ProviderHomeScreen extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (_) => ProviderNearbyRequestsScreen(userId: userId),
+      ),
+    );
+  }
+
+  void _openJobs(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderJobsScreen(providerId: userId),
+      ),
+    );
+  }
+
+  // ✅ NEW: History page (DONE jobs)
+  void _openHistory(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProviderHistoryScreen(providerId: userId),
       ),
     );
   }
@@ -195,13 +216,31 @@ class ProviderHomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
 
-                      // ✅ UPDATED
                       _actionCard(
                         context: context,
                         title: "Nearby Requests",
                         subtitle: "View requests near your location",
                         icon: Icons.assignment_outlined,
                         onTap: () => _openNearbyRequests(context),
+                      ),
+
+                      const SizedBox(height: 10),
+                      _actionCard(
+                        context: context,
+                        title: "My Jobs",
+                        subtitle: "See confirmed jobs & update progress",
+                        icon: Icons.work_outline,
+                        onTap: () => _openJobs(context),
+                      ),
+
+                      const SizedBox(height: 10),
+                      // ✅ NEW: History
+                      _actionCard(
+                        context: context,
+                        title: "History",
+                        subtitle: "Done jobs history",
+                        icon: Icons.history,
+                        onTap: () => _openHistory(context),
                       ),
 
                       const SizedBox(height: 10),
@@ -216,6 +255,7 @@ class ProviderHomeScreen extends StatelessWidget {
                           );
                         },
                       ),
+
                       const SizedBox(height: 10),
                       _actionCard(
                         context: context,

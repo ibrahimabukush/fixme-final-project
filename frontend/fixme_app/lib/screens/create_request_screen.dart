@@ -25,6 +25,29 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   double? _lat;
   double? _lng;
 
+  // ✅ NEW: service type selection
+  static const List<String> _serviceTypes = [
+    'GARAGE',
+    'OIL_CHANGE',
+    'BRAKES',
+    'TIRES',
+    'GLASS',
+    'FULL_SERVICE',
+    'TOWING',
+  ];
+
+  final Map<String, String> _serviceLabels = const {
+    'GARAGE': 'Garage / General',
+    'OIL_CHANGE': 'Oil change',
+    'BRAKES': 'Brakes',
+    'TIRES': 'Tires / Puncture',
+    'GLASS': 'Broken glass',
+    'FULL_SERVICE': 'Full service (טיפול كامل)',
+    'TOWING': 'Towing (גרר)',
+  };
+
+  String _selectedServiceType = 'GARAGE';
+
   @override
   void dispose() {
     _descCtrl.dispose();
@@ -46,8 +69,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Location permission denied')),
@@ -95,6 +117,8 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         description: _descCtrl.text.trim(),
         latitude: _lat!,
         longitude: _lng!,
+        // ✅ NEW: send serviceType to backend
+        serviceType: _selectedServiceType,
       );
 
       if (!mounted) return;
@@ -139,6 +163,24 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               ),
               const SizedBox(height: 16),
 
+              // ✅ NEW: Service Type dropdown
+              DropdownButtonFormField<String>(
+                value: _selectedServiceType,
+                decoration: const InputDecoration(
+                  labelText: 'Service Type',
+                  border: OutlineInputBorder(),
+                ),
+                items: _serviceTypes
+                    .map((s) => DropdownMenuItem(
+                          value: s,
+                          child: Text(_serviceLabels[s] ?? s),
+                        ))
+                    .toList(),
+                onChanged: _isLoading ? null : (v) => setState(() => _selectedServiceType = v ?? _selectedServiceType),
+              ),
+
+              const SizedBox(height: 12),
+
               TextFormField(
                 controller: _descCtrl,
                 minLines: 3,
@@ -147,8 +189,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                   labelText: 'Describe the problem',
                   border: OutlineInputBorder(),
                 ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Description required' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'Description required' : null,
               ),
 
               const SizedBox(height: 12),

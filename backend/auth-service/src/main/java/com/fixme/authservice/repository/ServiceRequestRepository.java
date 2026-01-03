@@ -8,4 +8,10 @@ import java.util.List;
 public interface ServiceRequestRepository extends JpaRepository<ServiceRequest, Long> {
     List<ServiceRequest> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
     List<ServiceRequest> findByStatus(RequestStatus status);
+    List<ServiceRequest> findByProviderIdOrderByCreatedAtDesc(Long providerId);
+    List<ServiceRequest> findByProviderIdAndStatusOrderByCreatedAtDesc(Long providerId, RequestStatus status);
+
+
+
+
 }

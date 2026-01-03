@@ -1,6 +1,7 @@
 package com.fixme.authservice.model;
 
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 
 @Entity
@@ -10,6 +11,11 @@ public class ServiceRequest {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    // Provider (nullable until assigned)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "provider_id", nullable = true)
+    private User provider;
 
     // Customer owner
     @ManyToOne(fetch = FetchType.LAZY)
@@ -28,6 +34,11 @@ public class ServiceRequest {
     @Column(nullable = false)
     private VehicleCategory vehicleCategory = VehicleCategory.ALL;
 
+    // ✅ NEW: type of service (OIL_CHANGE / TOWING / etc.)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "service_type", nullable = false)
+    private ServiceType serviceType;
+
     @Column(nullable = false)
     private Double latitude;
 
@@ -38,32 +49,110 @@ public class ServiceRequest {
     @Column(nullable = false)
     private RequestStatus status = RequestStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "progress_stage", nullable = false)
+    private ProgressStage progressStage = ProgressStage.ON_THE_WAY;
+
     @Column(nullable = false, updatable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDateTime createdAt;
 
-    // getters/setters
-    public Long getId() { return id; }
+    @PrePersist
+    public void prePersist() {
+        this.createdAt = LocalDateTime.now();
+        if (this.progressStage == null) this.progressStage = ProgressStage.ON_THE_WAY;
+        if (this.status == null) this.status = RequestStatus.PENDING;
+    }
 
-    public User getCustomer() { return customer; }
-    public void setCustomer(User customer) { this.customer = customer; }
+    // ========================
+    // Getters / Setters
+    // ========================
 
-    public Vehicle getVehicle() { return vehicle; }
-    public void setVehicle(Vehicle vehicle) { this.vehicle = vehicle; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public User getProvider() {
+        return provider;
+    }
 
-    public VehicleCategory getVehicleCategory() { return vehicleCategory; }
-    public void setVehicleCategory(VehicleCategory vehicleCategory) { this.vehicleCategory = vehicleCategory; }
+    public void setProvider(User provider) {
+        this.provider = provider;
+    }
 
-    public Double getLatitude() { return latitude; }
-    public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public User getCustomer() {
+        return customer;
+    }
 
-    public Double getLongitude() { return longitude; }
-    public void setLongitude(Double longitude) { this.longitude = longitude; }
+    public void setCustomer(User customer) {
+        this.customer = customer;
+    }
 
-    public RequestStatus getStatus() { return status; }
-    public void setStatus(RequestStatus status) { this.status = status; }
+    public Vehicle getVehicle() {
+        return vehicle;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setVehicle(Vehicle vehicle) {
+        this.vehicle = vehicle;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public VehicleCategory getVehicleCategory() {
+        return vehicleCategory;
+    }
+
+    public void setVehicleCategory(VehicleCategory vehicleCategory) {
+        this.vehicleCategory = vehicleCategory;
+    }
+
+    // ✅ NEW getters/setters
+    public ServiceType getServiceType() {
+        return serviceType;
+    }
+
+    public void setServiceType(ServiceType serviceType) {
+        this.serviceType = serviceType;
+    }
+
+    public Double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(Double latitude) {
+        this.latitude = latitude;
+    }
+
+    public Double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(Double longitude) {
+        this.longitude = longitude;
+    }
+
+    public RequestStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(RequestStatus status) {
+        this.status = status;
+    }
+
+    public ProgressStage getProgressStage() {
+        return progressStage;
+    }
+
+    public void setProgressStage(ProgressStage progressStage) {
+        this.progressStage = progressStage;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
 }

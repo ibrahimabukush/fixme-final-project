@@ -4,6 +4,7 @@ import com.fixme.authservice.model.ProviderBusiness;
 import com.fixme.authservice.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ProviderBusinessRepository extends JpaRepository<ProviderBusiness, Long> {
@@ -13,4 +14,6 @@ public interface ProviderBusinessRepository extends JpaRepository<ProviderBusine
 
     // حذف الـ business تبع provider معيّن
     void deleteByUser(User user);
+    List<ProviderBusiness> findByLatitudeNotNullAndLongitudeNotNull();
+
 }

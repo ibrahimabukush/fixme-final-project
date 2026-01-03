@@ -41,11 +41,20 @@ public class ProviderService {
         business.setCity(request.getCity());
         business.setAddress(request.getAddress());
         business.setDescription(request.getDescription());
+
+        // نص عام (اختياري)
         business.setServices(request.getServices());
         business.setOpeningHours(request.getOpeningHours());
+
         business.setUpdatedAt(LocalDateTime.now());
 
-        // ✅ NEW: location (optional for now)
+        // ✅ categories (Vehicle types)
+        business.setCategories(request.getCategories());
+
+        // ✅ offeredServices (Service types)
+        business.setOfferedServices(request.getOfferedServices());
+
+        // location
         if (request.getLatitude() != null && request.getLongitude() != null) {
             business.setLatitude(request.getLatitude());
             business.setLongitude(request.getLongitude());
@@ -62,6 +71,8 @@ public class ProviderService {
                 .description(saved.getDescription())
                 .services(saved.getServices())
                 .openingHours(saved.getOpeningHours())
+                .categories(saved.getCategories())
+                .offeredServices(saved.getOfferedServices()) // ✅ NEW
                 .latitude(saved.getLatitude())
                 .longitude(saved.getLongitude())
                 .build();
@@ -81,6 +92,8 @@ public class ProviderService {
                 .description(business.getDescription())
                 .services(business.getServices())
                 .openingHours(business.getOpeningHours())
+                .categories(business.getCategories())
+                .offeredServices(business.getOfferedServices()) // ✅ NEW
                 .latitude(business.getLatitude())
                 .longitude(business.getLongitude())
                 .build();

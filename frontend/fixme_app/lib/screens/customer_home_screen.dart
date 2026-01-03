@@ -5,7 +5,8 @@ import '../services/auth_service.dart';
 import 'add_car_screen.dart';
 import 'profile_screen.dart';
 import 'edit_car_screen.dart';
-import 'create_request_screen.dart';
+import 'customer_nearby_providers_screen.dart';
+import 'customer_requests_screen.dart';
 import 'my_requests_screen.dart';
 
 class CustomerHomeScreen extends StatefulWidget {
@@ -54,6 +55,15 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
+        builder: (_) => CustomerRequestsScreen(userId: widget.userId),
+      ),
+    );
+  }
+
+  void _goToHistory() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
         builder: (_) => MyRequestsScreen(userId: widget.userId),
       ),
     );
@@ -63,6 +73,58 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     await AuthService.logout();
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
+  // ✅ NEW: service types
+  static const List<String> _serviceTypes = [
+    'GARAGE',
+    'OIL_CHANGE',
+    'BRAKES',
+    'TIRES',
+    'GLASS',
+    'FULL_SERVICE',
+    'TOWING',
+  ];
+
+  final Map<String, String> _serviceLabels = const {
+    'GARAGE': 'Garage / General',
+    'OIL_CHANGE': 'Oil change',
+    'BRAKES': 'Brakes',
+    'TIRES': 'Tires / Puncture',
+    'GLASS': 'Broken glass',
+    'FULL_SERVICE': 'Full service (טיפול كامل)',
+    'TOWING': 'Towing (גרر)',
+  };
+
+  // ✅ NEW: show dialog to choose service type
+  Future<String?> _pickServiceType() async {
+    return showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Choose service type'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: _serviceTypes.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (_, i) {
+              final s = _serviceTypes[i];
+              return ListTile(
+                title: Text(_serviceLabels[s] ?? s),
+                onTap: () => Navigator.pop(context, s),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
   }
 
   // ================= EMPTY STATE =================
@@ -223,18 +285,24 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             children: [
               TextButton(
                 onPressed: () async {
+                  // ✅ NEW: ask for service type first
+                  final serviceType = await _pickServiceType();
+                  if (serviceType == null) return;
+
                   final ok = await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CreateRequestScreen(
+                      builder: (_) => CustomerNearbyProvidersScreen(
                         userId: widget.userId,
-                        vehicle: v,
+                        vehicleId: v.id,
+                        vehicleCategory: v.vehicleCategory,
+                        serviceType: serviceType, // ✅ NEW
                       ),
                     ),
                   );
-                  // لو رجع true (تم ارسال الطلب) مش لازم reload سيارات
+
                   if (ok == true) {
-                    // optional: show something or keep silent
+                    // optional: show something
                   }
                 },
                 child: const Text("Request"),
@@ -328,13 +396,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           ),
                         ),
 
-                        // ✅ My Requests
                         IconButton(
                           onPressed: _goToMyRequests,
                           tooltip: "My Requests",
                           icon: const Icon(Icons.receipt_long),
                         ),
-
+                        IconButton(
+                          onPressed: _goToHistory,
+                          tooltip: "History",
+                          icon: const Icon(Icons.history),
+                        ),
                         IconButton(
                           onPressed: _goToProfile,
                           tooltip: "Profile",

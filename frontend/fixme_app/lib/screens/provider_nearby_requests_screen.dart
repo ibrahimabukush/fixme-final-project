@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-
 import '../models/service_request.dart';
 import '../services/provider_requests_service.dart';
 
@@ -16,59 +14,26 @@ class ProviderNearbyRequestsScreen extends StatefulWidget {
 
 class _ProviderNearbyRequestsScreenState
     extends State<ProviderNearbyRequestsScreen> {
-  double _radiusKm = 10;
-
   late Future<List<ServiceRequest>> _future;
-
-  double? _lat;
-  double? _lng;
 
   @override
   void initState() {
     super.initState();
-    _future = _loadNearby();
+    _future = _loadInbox();
   }
 
-  Future<Position> _getMyLocation() async {
-    final enabled = await Geolocator.isLocationServiceEnabled();
-    if (!enabled) {
-      throw Exception("Location services are disabled");
-    }
-
-    var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
-
-    if (perm == LocationPermission.denied ||
-        perm == LocationPermission.deniedForever) {
-      throw Exception("Location permission denied");
-    }
-
-    return Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-  }
-
-  Future<List<ServiceRequest>> _loadNearby() async {
-    // 1) get provider current location
-    final pos = await _getMyLocation();
-    _lat = pos.latitude;
-    _lng = pos.longitude;
-
-    // 2) call backend
-    return ProviderRequestsService.getNearbyRequests(
+  Future<List<ServiceRequest>> _loadInbox() {
+    return ProviderRequestsService.inbox(
       providerId: widget.userId,
-      latitude: _lat!,
-      longitude: _lng!,
-      radiusKm: _radiusKm,
+      status: 'WAITING_PROVIDER',
     );
   }
 
   Future<void> _reload() async {
     setState(() {
-      _future = _loadNearby();
+      _future = _loadInbox();
     });
+    await _future;
   }
 
   String _prettyCategory(String v) {
@@ -102,12 +67,29 @@ class _ProviderNearbyRequestsScreenState
     );
   }
 
-  Widget _requestCard(ServiceRequest r) {
-    final distanceText = (r.distanceKm == null)
-        ? "Distance: -"
-        : "Distance: ${r.distanceKm!.toStringAsFixed(1)} km";
+  Future<void> _accept(ServiceRequest r) async {
+    try {
+      final updated = await ProviderRequestsService.accept(
+        providerId: widget.userId,
+        requestId: r.id,
+      );
 
-    final desc = (r.description ?? '').trim();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Accepted ✅ (Status: ${updated.status})")),
+      );
+
+      await _reload();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Accept failed: $e")),
+      );
+    }
+  }
+
+  Widget _requestCard(ServiceRequest r) {
+    final desc = (r.description).trim();
 
     return Material(
       elevation: 6,
@@ -127,7 +109,8 @@ class _ProviderNearbyRequestsScreenState
               borderRadius: BorderRadius.circular(14),
               color: const Color(0xFFEFF6FF),
             ),
-            child: const Icon(Icons.place_outlined, color: Color(0xFF2563EB)),
+            child: const Icon(Icons.assignment_outlined,
+                color: Color(0xFF2563EB)),
           ),
           title: Text(
             "${r.make} ${r.model} • ${r.plateNumber}",
@@ -151,19 +134,15 @@ class _ProviderNearbyRequestsScreenState
                   runSpacing: 6,
                   children: [
                     _pill("Category: ${_prettyCategory(r.vehicleCategory)}"),
-                    _pill(distanceText),
                     _pill("Status: ${r.status}"),
+                    _pill("Customer: ${r.customerId}"),
                   ],
                 ),
               ],
             ),
           ),
           trailing: ElevatedButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Accept will be added next ✅")),
-              );
-            },
+            onPressed: (r.status == 'WAITING_PROVIDER') ? () => _accept(r) : null,
             child: const Text("Accept"),
           ),
           onTap: () {
@@ -173,14 +152,13 @@ class _ProviderNearbyRequestsScreenState
                 title: const Text("Request details"),
                 content: Text(
                   "Request ID: ${r.id}\n"
-                  "Customer ID: ${r.customerId ?? '-'}\n"
+                  "Customer ID: ${r.customerId}\n"
                   "Vehicle: ${r.make} ${r.model}\n"
                   "Plate: ${r.plateNumber}\n"
                   "Year: ${r.year ?? '-'}\n"
                   "Category: ${_prettyCategory(r.vehicleCategory)}\n"
-                  "Distance: ${(r.distanceKm ?? 0).toStringAsFixed(2)} km\n"
                   "Location: ${r.latitude}, ${r.longitude}\n\n"
-                  "Description:\n${r.description ?? ''}",
+                  "Description:\n${r.description}",
                 ),
                 actions: [
                   TextButton(
@@ -221,8 +199,7 @@ class _ProviderNearbyRequestsScreenState
                   shadowColor: Colors.black12,
                   borderRadius: BorderRadius.circular(18),
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(18),
@@ -238,7 +215,7 @@ class _ProviderNearbyRequestsScreenState
                             color: const Color(0xFFEFF6FF),
                           ),
                           child: const Icon(
-                            Icons.assignment_outlined,
+                            Icons.inbox_outlined,
                             color: Color(0xFF2563EB),
                           ),
                         ),
@@ -248,16 +225,13 @@ class _ProviderNearbyRequestsScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Nearby Requests",
+                                "Inbox Requests",
                                 style: TextStyle(fontWeight: FontWeight.w900),
                               ),
                               SizedBox(height: 2),
                               Text(
-                                "Requests around you",
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: Colors.black54,
-                                ),
+                                "Requests assigned to you (WAITING_PROVIDER)",
+                                style: TextStyle(fontSize: 12.5, color: Colors.black54),
                               ),
                             ],
                           ),
@@ -278,51 +252,6 @@ class _ProviderNearbyRequestsScreenState
                 ),
               ),
 
-              // Radius selector
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-                child: Material(
-                  elevation: 6,
-                  shadowColor: Colors.black12,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFEAEAF2)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.tune, size: 20),
-                        const SizedBox(width: 10),
-                        const Text("Radius:",
-                            style: TextStyle(fontWeight: FontWeight.w800)),
-                        const SizedBox(width: 10),
-                        DropdownButton<double>(
-                          value: _radiusKm,
-                          items: const [
-                            DropdownMenuItem(value: 5, child: Text("5 km")),
-                            DropdownMenuItem(value: 10, child: Text("10 km")),
-                            DropdownMenuItem(value: 20, child: Text("20 km")),
-                            DropdownMenuItem(value: 50, child: Text("50 km")),
-                          ],
-                          onChanged: (v) {
-                            if (v == null) return;
-                            setState(() => _radiusKm = v);
-                            _reload();
-                          },
-                        ),
-                        const Spacer(),
-                        Text("${_radiusKm.toInt()} km",
-                            style: const TextStyle(color: Colors.black54)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
               Expanded(
                 child: FutureBuilder<List<ServiceRequest>>(
                   future: _future,
@@ -335,7 +264,7 @@ class _ProviderNearbyRequestsScreenState
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Text(
-                            "Failed to load nearby requests:\n${snap.error}",
+                            "Failed to load inbox requests:\n${snap.error}",
                             textAlign: TextAlign.center,
                           ),
                         ),
@@ -346,7 +275,7 @@ class _ProviderNearbyRequestsScreenState
                     if (list.isEmpty) {
                       return const Center(
                         child: Text(
-                          "No nearby requests right now.",
+                          "No requests right now.",
                           style: TextStyle(fontWeight: FontWeight.w800),
                         ),
                       );
@@ -357,8 +286,7 @@ class _ProviderNearbyRequestsScreenState
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(14, 6, 14, 22),
                         itemBuilder: (_, i) => _requestCard(list[i]),
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 10),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemCount: list.length,
                       ),
                     );

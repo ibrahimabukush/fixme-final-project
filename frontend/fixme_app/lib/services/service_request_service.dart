@@ -11,6 +11,7 @@ class ServiceRequestService {
     required String description,
     required double latitude,
     required double longitude,
+    required String serviceType, // ✅ NEW
   }) async {
     final url = Uri.parse('$baseUrl/api/customers/$userId/requests');
 
@@ -19,6 +20,7 @@ class ServiceRequestService {
       'description': description,
       'latitude': latitude,
       'longitude': longitude,
+      'serviceType': serviceType, // ✅ NEW
     });
 
     final response = await http.post(

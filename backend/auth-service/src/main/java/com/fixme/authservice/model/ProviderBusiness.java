@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Entity
 @Table(name = "provider_business")
@@ -35,7 +36,19 @@ public class ProviderBusiness {
     private String description;       // وصف قصير
     private String services;          // مثلاً "Towing, Tires, Garage"
     private String openingHours;      // مثلاً "Sun-Thu 09:00-18:00"
-
+    @ElementCollection(fetch = FetchType.EAGER)
+    @Enumerated(EnumType.STRING)
+    @CollectionTable(name = "provider_business_categories", joinColumns = @JoinColumn(name = "business_id"))
+    @Column(name = "category")
+    private java.util.Set<VehicleCategory> categories;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @Enumerated(EnumType.STRING)
+    @CollectionTable(
+            name = "provider_business_offered_services",
+            joinColumns = @JoinColumn(name = "business_id")
+    )
+    @Column(name = "service_type")
+    private Set<ServiceType> offeredServices;
     // ✅ NEW: provider location
     @Column(nullable = true)
     private Double latitude;

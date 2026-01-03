@@ -9,19 +9,16 @@ import java.util.Set;
 
 @Data
 @Builder
-public class ProviderBusinessResponse {
-
-    private Long id;
+public class NearbyProviderResponse {
     private Long userId;
+    private Long businessId;
     private String businessName;
-    private String city;
-    private String address;
     private String description;
     private String services;
+    private Set<ServiceType> offeredServices;
     private String openingHours;
     private Double latitude;
     private Double longitude;
-    private java.util.Set<VehicleCategory> categories;
-    private Set<ServiceType> offeredServices;
-
+    private Set<VehicleCategory> categories;
+    private Double distanceKm;
 }

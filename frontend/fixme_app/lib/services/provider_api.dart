@@ -12,13 +12,15 @@ class ProviderApi {
     required String openingHours,
     required double latitude,
     required double longitude,
+    required List<String> categories,
+    required List<String> offeredServices,
   }) async {
     final url = Uri.parse('$baseUrl/api/providers/$userId/business');
 
-    final body = jsonEncode({
+    final bodyMap = {
       "businessName": businessName,
 
-      // backend still requires them (nullable=false) -> send placeholders
+      // backend requires them (nullable=false)
       "city": "NA",
       "address": "NA",
 
@@ -26,15 +28,20 @@ class ProviderApi {
       "services": services,
       "openingHours": openingHours,
 
-      // ✅ new fields
+      // ✅ vehicle categories
+      "categories": categories,
+
+      // ✅ NEW: service types offered
+      "offeredServices": offeredServices,
+
       "latitude": latitude,
       "longitude": longitude,
-    });
+    };
 
     final res = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
-      body: body,
+      body: jsonEncode(bodyMap),
     );
 
     if (res.statusCode != 200 && res.statusCode != 201) {

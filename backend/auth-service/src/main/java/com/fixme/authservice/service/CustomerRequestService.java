@@ -36,17 +36,57 @@ public class CustomerRequestService {
             throw new IllegalStateException("Vehicle does not belong to this customer");
         }
 
+        // ✅ NEW: serviceType required
+        if (req.getServiceType() == null) {
+            throw new IllegalArgumentException("serviceType is required");
+        }
+
         ServiceRequest r = new ServiceRequest();
         r.setCustomer(user);
         r.setVehicle(vehicle);
+
         r.setDescription(req.getDescription());
         r.setLatitude(req.getLatitude());
         r.setLongitude(req.getLongitude());
+
+        // يعتمد على السيارة
         r.setVehicleCategory(vehicle.getVehicleCategory());
 
-        ServiceRequest saved = requestRepository.save(r);
+        // ✅ NEW: store requested service type (oil change / towing / etc)
+        r.setServiceType(req.getServiceType());
 
-        return toResponse(saved);
+        r.setProvider(null);
+        r.setStatus(RequestStatus.PENDING);
+
+        // ✅ default progress
+        r.setProgressStage(ProgressStage.ON_THE_WAY);
+
+        return toResponse(requestRepository.save(r));
+    }
+
+    public ServiceRequestResponse assignProvider(Long customerId, Long requestId, Long providerId) {
+        ServiceRequest r = requestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found"));
+
+        if (!r.getCustomer().getId().equals(customerId)) {
+            throw new IllegalStateException("Not your request");
+        }
+
+        if (r.getStatus() != RequestStatus.PENDING) {
+            throw new IllegalStateException("Request is not in PENDING state");
+        }
+
+        User provider = userRepository.findById(providerId)
+                .orElseThrow(() -> new IllegalArgumentException("Provider not found"));
+
+        if (provider.getRole() != UserRole.PROVIDER) {
+            throw new IllegalStateException("User is not a provider");
+        }
+
+        r.setProvider(provider);
+        r.setStatus(RequestStatus.WAITING_PROVIDER);
+
+        return toResponse(requestRepository.save(r));
     }
 
     @Transactional(readOnly = true)
@@ -57,20 +97,44 @@ public class CustomerRequestService {
                 .toList();
     }
 
+    public ServiceRequestResponse confirm(Long customerId, Long requestId) {
+        ServiceRequest r = requestRepository.findById(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found"));
+
+        if (!r.getCustomer().getId().equals(customerId)) {
+            throw new IllegalStateException("Not your request");
+        }
+
+        if (r.getStatus() != RequestStatus.WAITING_CUSTOMER) {
+            throw new IllegalStateException("Request is not waiting for customer confirm");
+        }
+
+        r.setStatus(RequestStatus.ACCEPTED);
+        return toResponse(requestRepository.save(r));
+    }
+
     private ServiceRequestResponse toResponse(ServiceRequest r) {
         Vehicle v = r.getVehicle();
+        Long providerId = (r.getProvider() != null) ? r.getProvider().getId() : null;
 
+        // ✅ IMPORTANT:
+        // This constructor must match your updated ServiceRequestResponse DTO
         return new ServiceRequestResponse(
                 r.getId(),
+                r.getCustomer().getId(),
+                providerId,
                 v.getId(),
                 v.getPlateNumber(),
                 v.getMake(),
                 v.getModel(),
                 v.getYear(),
-                r.getVehicleCategory(),
+                r.getDescription(),
+                v.getVehicleCategory(),
+                r.getServiceType(),          // ✅ NEW
                 r.getLatitude(),
                 r.getLongitude(),
                 r.getStatus(),
+                r.getProgressStage(),
                 r.getCreatedAt()
         );
     }
