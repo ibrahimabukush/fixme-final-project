@@ -1,6 +1,7 @@
 // lib/screens/profile_screen.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 
 import '../services/profile_service.dart';
 import '../services/auth_service.dart';
@@ -8,7 +9,6 @@ import '../models/user_profile.dart';
 
 class ProfileScreen extends StatefulWidget {
   final int userId;
-
   const ProfileScreen({super.key, required this.userId});
 
   @override
@@ -19,6 +19,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   UserProfile? _profile;
   bool _loading = true;
   bool _saving = false;
+
+  final _formKey = GlobalKey<FormState>();
 
   final _firstCtrl = TextEditingController();
   final _lastCtrl = TextEditingController();
@@ -33,10 +35,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
+  // ✅ 05 + 8 digits (10 digits total)
   bool _isValidIsraeliPhone(String phone) {
-    // 05 + 8 digits (10 digits total)
     final reg = RegExp(r'^05\d{8}$');
     return reg.hasMatch(phone);
+  }
+
+  bool _isValidName(String name) {
+    // letters + spaces + '-' + '\'' فقط
+    final reg = RegExp(r"^[A-Za-z\u0590-\u05FF\u0600-\u06FF' -]{2,40}$");
+    return reg.hasMatch(name.trim());
   }
 
   Future<void> _loadProfile() async {
@@ -65,20 +73,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _saveProfile() async {
     if (_profile == null) return;
 
-    final phone = _phoneCtrl.text.trim();
-    if (!_isValidIsraeliPhone(phone)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid Israeli phone like 0521234567')),
-      );
-      return;
-    }
+    // ✅ validate form first
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
     try {
       _profile!
         ..firstName = _firstCtrl.text.trim()
         ..lastName = _lastCtrl.text.trim()
-        ..phone = phone;
+        ..phone = _phoneCtrl.text.trim();
 
       final updated = await ProfileService.updateProfile(_profile!);
       if (!mounted) return;
@@ -86,7 +89,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() => _profile = updated);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Changes saved successfully')),
+        const SnackBar(content: Text('Changes saved successfully ✅')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -100,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _pickAndUploadImage() async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
 
     final bytes = await picked.readAsBytes();
@@ -121,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile photo updated')),
+        const SnackBar(content: Text('Profile photo updated ✅')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -131,6 +134,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _logout() async {
+    await AuthService.logout();
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }
 
   Widget _modernHeader() {
@@ -162,25 +171,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   borderRadius: BorderRadius.circular(14),
                   color: const Color(0xFFEEF2FF),
                 ),
-                child: const Icon(
-                  Icons.person_outline,
-                  color: Color(0xFF4F46E5),
-                ),
+                child: const Icon(Icons.person_outline, color: Color(0xFF4F46E5)),
               ),
               const SizedBox(width: 10),
               const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "Profile",
-                      style: TextStyle(fontWeight: FontWeight.w900),
-                    ),
+                    Text("Profile", style: TextStyle(fontWeight: FontWeight.w900)),
                     SizedBox(height: 2),
-                    Text(
-                      "Edit your personal info",
-                      style: TextStyle(fontSize: 12.5, color: Colors.black54),
-                    ),
+                    Text("Edit your personal info",
+                        style: TextStyle(fontSize: 12.5, color: Colors.black54)),
                   ],
                 ),
               ),
@@ -188,6 +189,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onPressed: _loadProfile,
                 tooltip: 'Refresh',
                 icon: const Icon(Icons.refresh),
+              ),
+              IconButton(
+                onPressed: _logout,
+                tooltip: 'Logout',
+                icon: const Icon(Icons.logout),
               ),
             ],
           ),
@@ -209,10 +215,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
           CircleAvatar(
             radius: 54,
             backgroundColor: Colors.grey.shade200,
-            backgroundImage: fullUrl != null ? NetworkImage(fullUrl) : null,
-            child: fullUrl == null
-                ? const Icon(Icons.person, size: 54, color: Colors.black54)
-                : null,
+            child: ClipOval(
+              child: fullUrl == null
+                  ? const SizedBox(
+                      width: 108,
+                      height: 108,
+                      child: Icon(Icons.person, size: 54, color: Colors.black54),
+                    )
+                  : Image.network(
+                      fullUrl,
+                      width: 108,
+                      height: 108,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox(
+                        width: 108,
+                        height: 108,
+                        child: Icon(Icons.person, size: 54, color: Colors.black54),
+                      ),
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return SizedBox(
+                          width: 108,
+                          height: 108,
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: progress.expectedTotalBytes == null
+                                  ? null
+                                  : progress.cumulativeBytesLoaded /
+                                      progress.expectedTotalBytes!,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
           ),
           Positioned(
             bottom: 0,
@@ -221,14 +257,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               elevation: 6,
               shape: const CircleBorder(),
               child: InkWell(
-                onTap: _pickAndUploadImage,
+                onTap: _saving ? null : _pickAndUploadImage,
                 customBorder: const CircleBorder(),
                 child: Container(
                   width: 38,
                   height: 38,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Color(0xFF4F46E5),
+                    color: _saving ? Colors.grey : const Color(0xFF4F46E5),
                   ),
                   child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
                 ),
@@ -247,6 +283,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool readOnly = false,
     TextInputType keyboardType = TextInputType.text,
     String? hint,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String?)? validator,
   }) {
     return Material(
       elevation: 6,
@@ -259,10 +297,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: Colors.white,
           border: Border.all(color: const Color(0xFFEAEAF2)),
         ),
-        child: TextField(
+        child: TextFormField(
           controller: controller,
           readOnly: readOnly,
           keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
+          validator: validator,
           decoration: InputDecoration(
             labelText: label,
             hintText: hint,
@@ -289,15 +330,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // Modern background gradient
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF5F7FF),
-              Color(0xFFFDF2F8),
-            ],
+            colors: [Color(0xFFF5F7FF), Color(0xFFFDF2F8)],
           ),
         ),
         child: SafeArea(
@@ -308,77 +345,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   : Column(
                       children: [
                         _modernHeader(),
+
+                        // ✅ content + sticky save button
                         Expanded(
-                          child: RefreshIndicator(
-                            onRefresh: _loadProfile,
-                            child: ListView(
-                              padding: const EdgeInsets.fromLTRB(14, 6, 14, 22),
-                              children: [
-                                const SizedBox(height: 6),
-                                _avatarSection(),
-                                const SizedBox(height: 14),
+                          child: Form(
+                            key: _formKey,
+                            child: RefreshIndicator(
+                              onRefresh: _loadProfile,
+                              child: ListView(
+                                padding: const EdgeInsets.fromLTRB(14, 6, 14, 120),
+                                children: [
+                                  const SizedBox(height: 6),
+                                  _avatarSection(),
+                                  const SizedBox(height: 14),
 
-                                _fieldCard(
-                                  label: 'First name',
-                                  controller: _firstCtrl,
-                                  icon: Icons.badge_outlined,
-                                  hint: 'e.g., Ibrahim',
-                                ),
-                                const SizedBox(height: 10),
-
-                                _fieldCard(
-                                  label: 'Last name',
-                                  controller: _lastCtrl,
-                                  icon: Icons.badge_outlined,
-                                  hint: 'e.g., Abu Kush',
-                                ),
-                                const SizedBox(height: 10),
-
-                                _fieldCard(
-                                  label: 'Email',
-                                  controller: _emailCtrl,
-                                  icon: Icons.email_outlined,
-                                  readOnly: true,
-                                ),
-                                const SizedBox(height: 10),
-
-                                _fieldCard(
-                                  label: 'Phone (Israel)',
-                                  controller: _phoneCtrl,
-                                  icon: Icons.phone_outlined,
-                                  keyboardType: TextInputType.phone,
-                                  hint: '0521234567',
-                                ),
-                                const SizedBox(height: 16),
-
-                                SizedBox(
-                                  height: 48,
-                                  child: ElevatedButton.icon(
-                                    onPressed: _saving ? null : _saveProfile,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF4F46E5),
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                    ),
-                                    icon: _saving
-                                        ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const Icon(Icons.save_outlined),
-                                    label: Text(
-                                      _saving ? 'Saving...' : 'Save changes',
-                                      style: const TextStyle(fontWeight: FontWeight.w800),
-                                    ),
+                                  _fieldCard(
+                                    label: 'First name',
+                                    controller: _firstCtrl,
+                                    icon: Icons.badge_outlined,
+                                    hint: 'e.g., Ibrahim',
+                                    validator: (v) {
+                                      final s = (v ?? '').trim();
+                                      if (s.isEmpty) return 'First name is required';
+                                      if (!_isValidName(s)) return 'Use letters only (2-40)';
+                                      return null;
+                                    },
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 10),
+
+                                  _fieldCard(
+                                    label: 'Last name',
+                                    controller: _lastCtrl,
+                                    icon: Icons.badge_outlined,
+                                    hint: 'e.g., Abu Kush',
+                                    validator: (v) {
+                                      final s = (v ?? '').trim();
+                                      if (s.isEmpty) return 'Last name is required';
+                                      if (!_isValidName(s)) return 'Use letters only (2-40)';
+                                      return null;
+                                    },
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  _fieldCard(
+                                    label: 'Email',
+                                    controller: _emailCtrl,
+                                    icon: Icons.email_outlined,
+                                    readOnly: true,
+                                  ),
+                                  const SizedBox(height: 10),
+
+                                  _fieldCard(
+                                    label: 'Phone (Israel)',
+                                    controller: _phoneCtrl,
+                                    icon: Icons.phone_outlined,
+                                    keyboardType: TextInputType.phone,
+                                    hint: '0521234567',
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(10),
+                                    ],
+                                    validator: (v) {
+                                      final s = (v ?? '').trim();
+                                      if (s.isEmpty) return 'Phone is required';
+                                      if (!_isValidIsraeliPhone(s)) return 'Example: 0521234567';
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -386,6 +421,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
         ),
       ),
+
+      // ✅ Sticky Save button
+      bottomNavigationBar: (_loading || _profile == null)
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+                child: SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _saving ? null : _saveProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_outlined),
+                    label: Text(
+                      _saving ? 'Saving...' : 'Save changes',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ),
+            ),
     );
   }
 }

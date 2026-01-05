@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'screens/forgot_password_screen.dart';
+
+import 'screens/start_screen.dart';
+import 'screens/role_selection_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/verify_screen.dart';
@@ -10,25 +14,56 @@ void main() {
 class FixMeApp extends StatelessWidget {
   const FixMeApp({super.key});
 
+  String _readRoleArg(RouteSettings settings, {String fallback = 'CUSTOMER'}) {
+    final arg = settings.arguments;
+    if (arg is String && (arg == 'CUSTOMER' || arg == 'PROVIDER')) return arg;
+    return fallback;
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'FixMe',
-      theme: ThemeData(primarySwatch: Colors.deepPurple),
-      initialRoute: '/login',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+        useMaterial3: false,
+      ),
+
+      // ✅ Start page
+      initialRoute: '/',
+
+      // ✅ keep static routes here
       routes: {
-        '/login': (context) => const LoginScreen(),
-        // 👇 هون نقرأ الـ role من arguments ونمرّره للـ SignupScreen
-        '/signup': (context) {
-          final arg = ModalRoute.of(context)!.settings.arguments;
-          final initialRole =
-              (arg is String && (arg == 'CUSTOMER' || arg == 'PROVIDER'))
-                  ? arg
-                  : 'CUSTOMER';
-          return SignupScreen(initialRole: initialRole);
-        },
+        '/': (context) => const StartScreen(),
+        '/role': (context) => const RoleSelectionScreen(),
         '/verify': (context) => const VerifyScreen(),
-        // customerHome و providerHome زي ما عندك
+        '/forgot': (_) => const ForgotPasswordScreen(),
+      },
+
+      // ✅ dynamic routes (need arguments)
+      onGenerateRoute: (settings) {
+        switch (settings.name) {
+          case '/login': {
+            // إذا بدك تقرأ role كمان للـ login، خليه هون
+            // final role = _readRoleArg(settings);
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const LoginScreen(),
+            );
+          }
+
+          case '/signup': {
+            final role = _readRoleArg(settings);
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => SignupScreen(initialRole: role),
+            );
+          }
+
+          default:
+            return null;
+        }
       },
     );
   }

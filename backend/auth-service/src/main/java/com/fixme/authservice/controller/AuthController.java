@@ -1,9 +1,6 @@
 package com.fixme.authservice.controller;
 
-import com.fixme.authservice.dto.LoginRequest;
-import com.fixme.authservice.dto.LoginResponse;
-import com.fixme.authservice.dto.SignupRequest;
-import com.fixme.authservice.dto.VerificationRequest;
+import com.fixme.authservice.dto.*;
 import com.fixme.authservice.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,4 +57,23 @@ public class AuthController {
                     .body(Map.of("error", "Unexpected error while verifying"));
         }
     }
+    @PostMapping("/forgot-password/request")
+    public ResponseEntity<?> forgotPasswordRequest(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.requestPasswordReset(request);
+        // Return generic message (security: don't reveal if user exists)
+        return ResponseEntity.ok(Map.of("message", "If the account exists, a reset code was sent."));
+    }
+
+    // ✅ NEW: forgot password - reset password
+    @PostMapping("/forgot-password/reset")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.ok(Map.of("message", "Password updated successfully"));
+    }
+    @PostMapping("/verify/resend")
+    public ResponseEntity<?> resendVerifyCode(@Valid @RequestBody ResendVerificationRequest request) {
+        authService.resendSignupCode(request);
+        return ResponseEntity.ok(Map.of("message", "Verification code resent (if allowed)."));
+    }
+
 }

@@ -33,29 +33,36 @@ class AuthService {
         'password': password,
       }),
     );
-      if (res.statusCode == 403) {
-    final data = jsonDecode(res.body);
-    final msg = data['error'] ?? 'حساب المزود غير مفعل بعد';
-    throw Exception(msg);
-  }
+
+    if (res.statusCode == 403) {
+      final data = jsonDecode(res.body);
+      final msg = data['error'] ?? 'Provider account not approved yet';
+      throw Exception(msg);
+    }
 
     if (res.statusCode != 200) {
-      throw Exception('Login failed: ${res.statusCode} - ${res.body}');
+      // backend sometimes returns: {"error":"..."}
+      try {
+        final data = jsonDecode(res.body);
+        final msg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : res.body;
+        throw Exception(msg);
+      } catch (_) {
+        throw Exception('Login failed: ${res.statusCode} - ${res.body}');
+      }
     }
 
     final data = jsonDecode(res.body) as Map<String, dynamic>;
-    // شكل الرد من الـ backend:
-    // { "userId": 19, "role": "ADMIN", "token": "eyJhbGciOi..." }
+    // backend: { "userId": 19, "role": "CUSTOMER", "token": "..." }
 
     _token = data['token'] as String?;
     _userId = (data['userId'] as num?)?.toInt();
     _role = data['role'] as String?;
 
-    // debug صغير لو حاب تشوف بالقونصول:
     print('LOGIN OK -> userId=$_userId, role=$_role, token=$_token');
 
     if (_userId == null || _role == null) {
-      // نخليها throw عشان تروح على catch في الشاشات
       throw Exception('Missing userId/role in login response: ${res.body}');
     }
   }
@@ -84,14 +91,22 @@ class AuthService {
       'verificationType': verificationType,
     });
 
-    final response = await http.post(
+    final res = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: body,
     );
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Signup failed: ${response.statusCode} - ${response.body}');
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      try {
+        final data = jsonDecode(res.body);
+        final msg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : res.body;
+        throw Exception(msg);
+      } catch (_) {
+        throw Exception('Signup failed: ${res.statusCode} - ${res.body}');
+      }
     }
   }
 
@@ -99,14 +114,22 @@ class AuthService {
   static Future<void> verify(String tokenCode) async {
     final url = Uri.parse('$_baseUrl/api/auth/verify');
 
-    final response = await http.post(
+    final res = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'tokenCode': tokenCode}),
     );
 
-    if (response.statusCode != 200) {
-      throw Exception('Verification failed: ${response.statusCode} - ${response.body}');
+    if (res.statusCode != 200) {
+      try {
+        final data = jsonDecode(res.body);
+        final msg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : res.body;
+        throw Exception(msg);
+      } catch (_) {
+        throw Exception('Verification failed: ${res.statusCode} - ${res.body}');
+      }
     }
   }
 
@@ -115,6 +138,109 @@ class AuthService {
     _token = null;
     _userId = null;
     _role = null;
-    // لو حاب تضيف مسح SharedPreferences بعدين، تحطه هون
+  }
+
+  // ====== FORGOT PASSWORD: request reset code ======
+  static Future<void> requestPasswordReset({
+    required String identifier,
+    required String verificationType, // 'EMAIL' or 'PHONE'
+  }) async {
+    final url = Uri.parse('$_baseUrl/api/auth/forgot-password/request');
+
+    final res = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'identifier': identifier,
+        'verificationType': verificationType,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      try {
+        final data = jsonDecode(res.body);
+        final msg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : res.body;
+        throw Exception(msg);
+      } catch (_) {
+        throw Exception('Reset request failed: ${res.statusCode} - ${res.body}');
+      }
+    }
+  }
+
+  // ====== FORGOT PASSWORD: reset password ======
+  static Future<void> resetPassword({
+    required String identifier,
+    required String tokenCode,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    final url = Uri.parse('$_baseUrl/api/auth/forgot-password/reset');
+
+    final res = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'identifier': identifier,
+        'tokenCode': tokenCode,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      try {
+        final data = jsonDecode(res.body);
+        final msg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : res.body;
+        throw Exception(msg);
+      } catch (_) {
+        throw Exception('Reset failed: ${res.statusCode} - ${res.body}');
+      }
+    }
+  }
+
+  // ====== RESEND SIGNUP verification code ======
+  static Future<void> resendSignupVerificationCode({
+    required String identifier,
+    required String verificationType, // 'EMAIL' or 'PHONE'
+  }) async {
+    final url = Uri.parse('$_baseUrl/api/auth/verify/resend');
+
+    final res = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'identifier': identifier,
+        'verificationType': verificationType,
+      }),
+    );
+
+    if (res.statusCode != 200) {
+      try {
+        final data = jsonDecode(res.body);
+        final msg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : res.body;
+        throw Exception(msg);
+      } catch (_) {
+        throw Exception('Resend failed: ${res.statusCode} - ${res.body}');
+      }
+    }
+  }
+
+  // ✅ RESEND RESET password code
+  // Backend enforces 30 minutes cooldown
+  // Note: it uses the same endpoint "forgot-password/request"
+  static Future<void> resendResetCode({
+    required String identifier,
+    required String verificationType, // 'EMAIL' or 'PHONE'
+  }) async {
+    await requestPasswordReset(
+      identifier: identifier,
+      verificationType: verificationType,
+    );
   }
 }

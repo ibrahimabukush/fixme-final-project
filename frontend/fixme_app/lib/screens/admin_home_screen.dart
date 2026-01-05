@@ -18,7 +18,6 @@ class AdminHomeScreen extends StatefulWidget {
 
 class _AdminHomeScreenState extends State<AdminHomeScreen>
     with SingleTickerProviderStateMixin {
-  // Web/Windows: localhost. Emulator: 10.0.2.2
   final String baseUrl = 'http://localhost:8081';
 
   late TabController _tabController;
@@ -29,29 +28,32 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
 
   bool _isLoading = false;
 
+  // ✅ search
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+
+  Map<String, String> get _headers => {
+        'Accept': 'application/json',
+      };
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() => setState(() {}));
     _loadAll();
+
+    _searchCtrl.addListener(() {
+      setState(() => _query = _searchCtrl.text.trim().toLowerCase());
+    });
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
-
-  // If you later want to secure endpoints with JWT:
-  // Map<String, String> get _authHeaders => {
-  //   'Accept': 'application/json',
-  //   'Content-Type': 'application/json',
-  //   if (AuthService.token != null) 'Authorization': 'Bearer ${AuthService.token}',
-  // };
-
-  Map<String, String> get _headers => {
-        'Accept': 'application/json',
-      };
 
   Future<void> _loadAll() async {
     setState(() => _isLoading = true);
@@ -69,7 +71,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   Future<void> _fetchPendingProviders() async {
     final uri = Uri.parse('$baseUrl/api/admin/providers/pending');
     final res = await http.get(uri, headers: _headers);
-
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body) as List<dynamic>;
       if (mounted) setState(() => _pendingProviders = data);
@@ -81,7 +82,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   Future<void> _fetchProviders() async {
     final uri = Uri.parse('$baseUrl/api/admin/providers');
     final res = await http.get(uri, headers: _headers);
-
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body) as List<dynamic>;
       if (mounted) setState(() => _providers = data);
@@ -93,7 +93,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   Future<void> _fetchCustomers() async {
     final uri = Uri.parse('$baseUrl/api/admin/customers');
     final res = await http.get(uri, headers: _headers);
-
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body) as List<dynamic>;
       if (mounted) setState(() => _customers = data);
@@ -208,6 +207,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     }
   }
 
+  // ================= UI =================
+
   Widget _topBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
@@ -231,8 +232,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
                   borderRadius: BorderRadius.circular(14),
                   color: const Color(0xFFF0F9FF),
                 ),
-                child: const Icon(Icons.admin_panel_settings_outlined,
-                    color: Color(0xFF0284C7)),
+                child: const Icon(
+                  Icons.admin_panel_settings_outlined,
+                  color: Color(0xFF0284C7),
+                ),
               ),
               const SizedBox(width: 10),
               const Expanded(
@@ -276,12 +279,188 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     );
   }
 
+  Widget _statsRow() {
+    Widget stat({
+      required String label,
+      required int value,
+      required IconData icon,
+      required Color bg,
+      required Color fg,
+    }) {
+      return Expanded(
+        child: Material(
+          elevation: 6,
+          shadowColor: Colors.black12,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFEAEAF2)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, color: fg),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label,
+                          style: const TextStyle(
+                              fontSize: 12.5, color: Colors.black54)),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$value',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      child: Row(
+        children: [
+          stat(
+            label: 'Pending',
+            value: _pendingProviders.length,
+            icon: Icons.hourglass_bottom,
+            bg: const Color(0xFFFFF7ED),
+            fg: const Color(0xFFEA580C),
+          ),
+          const SizedBox(width: 10),
+          stat(
+            label: 'Providers',
+            value: _providers.length,
+            icon: Icons.storefront_outlined,
+            bg: const Color(0xFFEFF6FF),
+            fg: const Color(0xFF2563EB),
+          ),
+          const SizedBox(width: 10),
+          stat(
+            label: 'Customers',
+            value: _customers.length,
+            icon: Icons.directions_car_outlined,
+            bg: const Color(0xFFECFDF5),
+            fg: const Color(0xFF16A34A),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchBar() {
+    final hint = _tabController.index == 0
+        ? 'Search pending providers…'
+        : _tabController.index == 1
+            ? 'Search providers…'
+            : 'Search customers…';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+      child: Material(
+        elevation: 6,
+        shadowColor: Colors.black12,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFEAEAF2)),
+          ),
+          child: TextField(
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              hintText: hint,
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear',
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => _searchCtrl.clear(),
+                    ),
+              filled: true,
+              fillColor: const Color(0xFFF6F7FB),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tabs() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: Material(
+        elevation: 6,
+        shadowColor: Colors.black12,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: const Color(0xFFEAEAF2)),
+          ),
+          child: Container(
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F7FB),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w900),
+              labelColor: Colors.black,
+              unselectedLabelColor: Colors.black54,
+              indicator: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFEAEAF2)),
+              ),
+              tabs: const [
+                Tab(text: 'Pending'),
+                Tab(text: 'Providers'),
+                Tab(text: 'Customers'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _chip(String text, {IconData? icon}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F4F6),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -351,11 +530,18 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     );
   }
 
+  bool _matchQuery(Map<String, dynamic> obj, List<String> keys) {
+    if (_query.isEmpty) return true;
+    final hay = keys
+        .map((k) => (obj[k] ?? '').toString().toLowerCase())
+        .join(' | ');
+    return hay.contains(_query);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        // Modern background
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
@@ -367,31 +553,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
           child: Column(
             children: [
               _topBar(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Material(
-                  elevation: 6,
-                  shadowColor: Colors.black12,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFEAEAF2)),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.w800),
-                      tabs: const [
-                        Tab(text: 'Pending'),
-                        Tab(text: 'Providers'),
-                        Tab(text: 'Customers'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+              _statsRow(),
+              _tabs(),
               const SizedBox(height: 10),
+              _searchBar(),
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
@@ -411,23 +576,37 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
     );
   }
 
+  // ================= TABS =================
+
   Widget _buildPendingProvidersTab() {
-    if (_pendingProviders.isEmpty) {
-      return _sectionEmpty('No providers waiting for approval.');
+    final filtered = _pendingProviders
+        .where((e) => _matchQuery(e as Map<String, dynamic>, [
+              'businessName',
+              'firstName',
+              'lastName',
+              'email',
+              'phone',
+              'city',
+            ]))
+        .toList();
+
+    if (filtered.isEmpty) {
+      return _sectionEmpty(_query.isEmpty
+          ? 'No providers waiting for approval.'
+          : 'No results for "$_query".');
     }
 
     return RefreshIndicator(
       onRefresh: _fetchPendingProviders,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 6, 14, 20),
-        itemCount: _pendingProviders.length,
+        itemCount: filtered.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final p = _pendingProviders[index] as Map<String, dynamic>;
+          final p = filtered[index] as Map<String, dynamic>;
           final userId = p['userId'] as int;
 
-          final fullName =
-              '${p['firstName'] ?? ''} ${p['lastName'] ?? ''}'.trim();
+          final fullName = '${p['firstName'] ?? ''} ${p['lastName'] ?? ''}'.trim();
           final businessName = (p['businessName'] ?? 'No business name').toString();
           final city = (p['city'] ?? '').toString();
           final email = (p['email'] ?? '').toString();
@@ -466,22 +645,30 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   }
 
   Widget _buildProvidersTab() {
-    if (_providers.isEmpty) {
-      return _sectionEmpty('No providers found.');
+    final filtered = _providers
+        .where((e) => _matchQuery(e as Map<String, dynamic>, [
+              'firstName',
+              'lastName',
+              'email',
+              'phone',
+            ]))
+        .toList();
+
+    if (filtered.isEmpty) {
+      return _sectionEmpty(_query.isEmpty ? 'No providers found.' : 'No results for "$_query".');
     }
 
     return RefreshIndicator(
       onRefresh: _fetchProviders,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 6, 14, 20),
-        itemCount: _providers.length,
+        itemCount: filtered.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final u = _providers[index] as Map<String, dynamic>;
+          final u = filtered[index] as Map<String, dynamic>;
           final userId = u['id'] as int;
 
-          final fullName =
-              '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim();
+          final fullName = '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim();
           final email = (u['email'] ?? '').toString();
           final phone = (u['phone'] ?? '').toString();
 
@@ -501,22 +688,30 @@ class _AdminHomeScreenState extends State<AdminHomeScreen>
   }
 
   Widget _buildCustomersTab() {
-    if (_customers.isEmpty) {
-      return _sectionEmpty('No customers found.');
+    final filtered = _customers
+        .where((e) => _matchQuery(e as Map<String, dynamic>, [
+              'firstName',
+              'lastName',
+              'email',
+              'phone',
+            ]))
+        .toList();
+
+    if (filtered.isEmpty) {
+      return _sectionEmpty(_query.isEmpty ? 'No customers found.' : 'No results for "$_query".');
     }
 
     return RefreshIndicator(
       onRefresh: _fetchCustomers,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(14, 6, 14, 20),
-        itemCount: _customers.length,
+        itemCount: filtered.length,
         separatorBuilder: (_, __) => const SizedBox(height: 10),
         itemBuilder: (context, index) {
-          final u = _customers[index] as Map<String, dynamic>;
+          final u = filtered[index] as Map<String, dynamic>;
           final userId = u['id'] as int;
 
-          final fullName =
-              '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim();
+          final fullName = '${u['firstName'] ?? ''} ${u['lastName'] ?? ''}'.trim();
           final email = (u['email'] ?? '').toString();
           final phone = (u['phone'] ?? '').toString();
 

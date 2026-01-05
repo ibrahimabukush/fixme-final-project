@@ -3,9 +3,12 @@ import '../services/auth_service.dart';
 import 'provider_home_screen.dart';
 import 'admin_home_screen.dart';
 import 'customer_home_screen.dart';
+import 'forgot_password_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final int initialTab; // 0=Customer, 1=Provider, 2=Admin
+  const LoginScreen({super.key, this.initialTab = 0});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -13,8 +16,10 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-  final TextEditingController _identifierCtrl = TextEditingController();
-  final TextEditingController _passwordCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  final _identifierCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
 
   bool _isLoading = false;
   bool _hidePass = true;
@@ -30,11 +35,38 @@ class _LoginScreenState extends State<LoginScreen>
     return null; // Admin no signup
   }
 
+  String get _roleTitle {
+    if (isAdmin) return "Admin";
+    if (isProvider) return "Provider";
+    return "Customer";
+  }
+
+  String get _subtitle {
+    if (isAdmin) return "Sign in with admin credentials";
+    if (isProvider) return "Sign in to manage your services";
+    return "Sign in to request assistance";
+  }
+
+  IconData get _identifierIcon {
+    if (isAdmin) return Icons.admin_panel_settings_outlined;
+    return Icons.alternate_email;
+  }
+
+  String get _identifierLabel {
+    if (isAdmin) return "Admin email / phone";
+    return "Email or phone";
+  }
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() => setState(() {}));
+
+    final safeIndex = widget.initialTab.clamp(0, 2);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: safeIndex);
+
+    _tabController.addListener(() {
+      setState(() {}); // update UI labels/subtitle when switching
+    });
   }
 
   @override
@@ -45,16 +77,16 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
     final identifier = _identifierCtrl.text.trim();
     final password = _passwordCtrl.text;
-
-    if (identifier.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email/phone and password')),
-      );
-      return;
-    }
 
     setState(() => _isLoading = true);
 
@@ -70,26 +102,22 @@ class _LoginScreenState extends State<LoginScreen>
       final role = AuthService.role;
 
       if (userId == null || role == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to read user data from server')),
-        );
+        _snack('Failed to read user data from server');
         return;
       }
 
-      // Ensure selected tab matches real role
-      if (isAdmin && role != 'ADMIN' ||
-          isProvider && role != 'PROVIDER' ||
-          isCustomer && role != 'CUSTOMER') {
+      final mismatch =
+          (isAdmin && role != 'ADMIN') ||
+          (isProvider && role != 'PROVIDER') ||
+          (isCustomer && role != 'CUSTOMER');
+
+      if (mismatch) {
         await AuthService.logout();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Role mismatch (your role is: $role)')),
-        );
+        _snack('Role mismatch (your role is: $role)');
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Logged in successfully')),
-      );
+      _snack('Logged in successfully');
 
       if (role == 'CUSTOMER') {
         Navigator.pushReplacement(
@@ -104,40 +132,40 @@ class _LoginScreenState extends State<LoginScreen>
       } else if (role == 'ADMIN') {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => AdminHomeScreen(adminUserId: userId)),
+          MaterialPageRoute(
+            builder: (_) => AdminHomeScreen(adminUserId: userId),
+          ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unknown role from server: $role')),
-        );
+        _snack('Unknown role from server: $role');
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login error: $e')),
-      );
+      _snack('Login error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String get _roleTitle {
-    if (isAdmin) return "Admin";
-    if (isProvider) return "Provider";
-    return "Customer";
-  }
-
-  String get _subtitle {
-    if (isAdmin) return "Sign in with admin credentials";
-    if (isProvider) return "Sign in to manage your services";
-    return "Sign in to request assistance";
+  InputDecoration _dec({
+    required String label,
+    required IconData icon,
+    String? hint,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon),
+      suffixIcon: suffix,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 700;
-    final cardWidth = isMobile ? size.width * 0.92 : 520.0;
+    final cardWidth = isMobile ? size.width * 0.92 : 540.0;
 
     return Scaffold(
       body: Container(
@@ -147,208 +175,221 @@ class _LoginScreenState extends State<LoginScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF5F7FF),
-              Color(0xFFFDF2F8),
-            ],
+            colors: [Color(0xFFF5F7FF), Color(0xFFFDF2F8)],
           ),
         ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: cardWidth),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Material(
-                elevation: 12,
-                shadowColor: Colors.black12,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFFEAEAF2)),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Header
-                      Row(
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: cardWidth),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Material(
+                  elevation: 14,
+                  shadowColor: Colors.black12,
+                  borderRadius: BorderRadius.circular(24),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0xFFEAEAF2)),
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: ListView(
+                        shrinkWrap: true,
                         children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(14),
-                              color: const Color(0xFFEEF2FF),
-                            ),
-                            child: const Icon(
-                              Icons.car_repair,
-                              color: Color(0xFF4F46E5),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "FixMe",
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
+                          Row(
+                            children: [
+                              Container(
+                                width: 54,
+                                height: 54,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [Color(0xFF4F46E5), Color(0xFF2563EB)],
                                   ),
                                 ),
-                                SizedBox(height: 2),
-                                Text(
-                                  "Welcome back",
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Colors.black54,
+                                child: const Icon(Icons.car_repair, color: Colors.white),
+                              ),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      "FixMe",
+                                      style: TextStyle(
+                                        fontSize: 18.5,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    SizedBox(height: 3),
+                                    Text(
+                                      "Welcome back",
+                                      style: TextStyle(color: Colors.black54),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF6F7FB),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFEAEAF2)),
+                            ),
+                            child: TabBar(
+                              controller: _tabController,
+                              indicatorSize: TabBarIndicatorSize.tab,
+                              dividerColor: Colors.transparent,
+                              indicator: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color: Colors.white,
+                                border: Border.all(color: const Color(0xFFEAEAF2)),
+                              ),
+                              labelColor: Colors.black,
+                              unselectedLabelColor: Colors.black54,
+                              tabs: const [
+                                Tab(text: 'Customer'),
+                                Tab(text: 'Provider'),
+                                Tab(text: 'Admin'),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          Text(
+                            "Login as $_roleTitle",
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(_subtitle, style: const TextStyle(color: Colors.black54)),
+
+                          const SizedBox(height: 14),
+
+                          TextFormField(
+                            controller: _identifierCtrl,
+                            textInputAction: TextInputAction.next,
+                            decoration: _dec(
+                              label: _identifierLabel,
+                              icon: _identifierIcon,
+                              hint: isAdmin ? 'admin@example.com' : 'name@example.com or 05XXXXXXXX',
+                            ),
+                            validator: (v) {
+                              final t = (v ?? '').trim();
+                              if (t.isEmpty) return 'Please enter email/phone';
+                              return null;
+                            },
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          TextFormField(
+                            controller: _passwordCtrl,
+                            obscureText: _hidePass,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _submit(),
+                            decoration: _dec(
+                              label: 'Password',
+                              icon: Icons.lock_outline,
+                              suffix: IconButton(
+                                onPressed: _isLoading ? null : () => setState(() => _hidePass = !_hidePass),
+                                icon: Icon(_hidePass ? Icons.visibility : Icons.visibility_off),
+                              ),
+                            ),
+                            validator: (v) {
+                              final t = (v ?? '');
+                              if (t.isEmpty) return 'Please enter password';
+                              return null;
+                            },
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  isAdmin
+                                      ? 'Admin accounts are created by the system.'
+                                      : 'New here? Create an account below.',
+                                  style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _isLoading
+    ? null
+    : () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+        );
+      },
+
+                                child: const Text('Forgot?'),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: _isLoading
+                                ? const Center(child: CircularProgressIndicator())
+                                : ElevatedButton(
+                                    onPressed: _submit,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF4F46E5),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: const Text(
+                                      'Sign in',
+                                      style: TextStyle(fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          if (!isAdmin)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text("Don’t have an account? "),
+                                TextButton(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () {
+                                          Navigator.pushNamed(
+                                            context,
+                                            '/signup',
+                                            arguments: _currentRole ?? 'CUSTOMER',
+                                          );
+                                        },
+                                  child: Text(
+                                    isProvider ? "Create Provider account" : "Create Customer account",
                                   ),
                                 ),
                               ],
                             ),
-                          ),
                         ],
                       ),
-
-                      const SizedBox(height: 18),
-
-                      // Tabs (modern container)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF6F7FB),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: TabBar(
-                          controller: _tabController,
-                          indicatorSize: TabBarIndicatorSize.tab,
-                          dividerColor: Colors.transparent,
-                          indicator: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            color: Colors.white,
-                            border: Border.all(color: const Color(0xFFEAEAF2)),
-                          ),
-                          labelColor: Colors.black,
-                          unselectedLabelColor: Colors.black54,
-                          tabs: const [
-                            Tab(text: 'Customer'),
-                            Tab(text: 'Provider'),
-                            Tab(text: 'Admin'),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "Login as $_roleTitle",
-                          style: const TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _subtitle,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            color: Colors.black54,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      // Email/Phone
-                      TextField(
-                        controller: _identifierCtrl,
-                        textInputAction: TextInputAction.next,
-                        decoration: InputDecoration(
-                          labelText: 'Email or phone',
-                          prefixIcon: const Icon(Icons.alternate_email),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Password
-                      TextField(
-                        controller: _passwordCtrl,
-                        obscureText: _hidePass,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _submit(),
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            onPressed: () => setState(() => _hidePass = !_hidePass),
-                            icon: Icon(
-                              _hidePass ? Icons.visibility : Icons.visibility_off,
-                            ),
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 46,
-                        child: _isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : ElevatedButton(
-                                onPressed: _submit,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4F46E5),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Sign in',
-                                  style: TextStyle(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Signup link (not for admin)
-                      if (!isAdmin)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text("Don’t have an account? "),
-                            TextButton(
-                              onPressed: () {
-                                Navigator.pushNamed(
-                                  context,
-                                  '/signup',
-                                  arguments: _currentRole ?? 'CUSTOMER',
-                                );
-                              },
-                              child: Text(
-                                isProvider ? "Create Provider account" : "Create Customer account",
-                              ),
-                            ),
-                          ],
-                        ),
-                    ],
+                    ),
                   ),
                 ),
               ),

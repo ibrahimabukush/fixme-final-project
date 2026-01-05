@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+
 import '../services/auth_service.dart';
 import 'add_car_screen.dart';
 
@@ -10,12 +12,23 @@ class VerifyScreen extends StatefulWidget {
 }
 
 class _VerifyScreenState extends State<VerifyScreen> {
-  final _codeCtrl = TextEditingController();
+  static const int _len = 6;
+  static const int _cooldownSeconds = 30;
+
+  final List<TextEditingController> _ctrls =
+      List.generate(_len, (_) => TextEditingController());
+  final List<FocusNode> _nodes = List.generate(_len, (_) => FocusNode());
+
   bool _isLoading = false;
 
   String? _identifier; // email or phone
-  String? _password;   // signup password (for auto-login)
-  String? _role;       // CUSTOMER / PROVIDER
+  String? _password; // signup password (for auto-login)
+  String? _role; // CUSTOMER / PROVIDER
+  String? _verificationType; // EMAIL / PHONE  ✅ new
+
+  // resend timer
+  int _resendSec = _cooldownSeconds;
+  Timer? _timer;
 
   @override
   void didChangeDependencies() {
@@ -26,12 +39,40 @@ class _VerifyScreenState extends State<VerifyScreen> {
       _identifier = args['identifier'] as String?;
       _password = args['password'] as String?;
       _role = args['role'] as String?;
+      _verificationType = args['verificationType'] as String?; // ✅
     }
+
+    _startTimerOnce();
+  }
+
+  void _startTimerOnce() {
+    _timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      if (_resendSec <= 0) {
+        t.cancel();
+        _timer = null;
+        return;
+      }
+      setState(() => _resendSec--);
+    });
+  }
+
+  void _restartTimer() {
+    setState(() => _resendSec = _cooldownSeconds);
+    _timer?.cancel();
+    _timer = null;
+    _startTimerOnce();
   }
 
   @override
   void dispose() {
-    _codeCtrl.dispose();
+    for (final c in _ctrls) {
+      c.dispose();
+    }
+    for (final n in _nodes) {
+      n.dispose();
+    }
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -40,11 +81,31 @@ class _VerifyScreenState extends State<VerifyScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  Future<void> _submit() async {
-    final code = _codeCtrl.text.trim();
+  String _code() => _ctrls.map((c) => c.text.trim()).join();
 
-    if (code.isEmpty) {
-      _snack('Please enter the verification code.');
+  void _clearAll() {
+    for (final c in _ctrls) {
+      c.clear();
+    }
+    FocusScope.of(context).requestFocus(_nodes.first);
+  }
+
+  void _handlePaste(String value) {
+    final digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.length < _len) return;
+
+    for (int i = 0; i < _len; i++) {
+      _ctrls[i].text = digits[i];
+    }
+    FocusScope.of(context).unfocus();
+    _submit();
+  }
+
+  Future<void> _submit() async {
+    final code = _code();
+
+    if (code.length != _len) {
+      _snack('Please enter the 6-digit code.');
       return;
     }
 
@@ -56,19 +117,17 @@ class _VerifyScreenState extends State<VerifyScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1) Verify only
       await AuthService.verify(code);
 
-      // 2) Provider: don’t login automatically
+      // Provider: don’t auto-login
       if (_role == 'PROVIDER') {
         _snack('Account verified. Your provider account will be activated after admin approval.');
         if (!mounted) return;
-
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
         return;
       }
 
-      // 3) Customer: auto-login
+      // Customer: auto-login
       await AuthService.login(
         identifier: _identifier!,
         password: _password!,
@@ -92,9 +151,176 @@ class _VerifyScreenState extends State<VerifyScreen> {
       );
     } catch (e) {
       _snack('Verification failed: $e');
+      _clearAll();
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _formatMMSS(int s) {
+    final m = (s ~/ 60).toString().padLeft(2, '0');
+    final sec = (s % 60).toString().padLeft(2, '0');
+    return '$m:$sec';
+  }
+
+  int? _extractRemainingSeconds(String error) {
+    // backend message: "Resend available in X seconds"
+    final match = RegExp(r'in\s+(\d+)\s+seconds').firstMatch(error);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
+
+  bool _looksLikeCooldownMessage(String error) {
+    // Our backend currently throws: "You can resend code every 30 minutes"
+    return error.toLowerCase().contains('resend') &&
+        error.toLowerCase().contains('30') &&
+        error.toLowerCase().contains('second');
+  }
+
+  Future<void> _resend() async {
+    if (_identifier == null || _verificationType == null) {
+      _snack('Missing identifier/verificationType.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await AuthService.resendSignupVerificationCode(
+        identifier: _identifier!,
+        verificationType: _verificationType!, // EMAIL / PHONE
+      );
+
+      _snack('Code resent.');
+      _restartTimer();
+    } catch (e) {
+      // If backend returns remaining seconds, sync timer
+      final remaining = _extractRemainingSeconds(e.toString());
+      if (remaining != null && remaining > 0) {
+        setState(() => _resendSec = remaining);
+        _timer?.cancel();
+        _timer = null;
+        _startTimerOnce();
+        _snack('Please wait ${_formatMMSS(remaining)} before resending.');
+      } else if (_looksLikeCooldownMessage(e.toString())) {
+        // Backend enforces 30 minutes cooldown; keep UI locked as well
+        _restartTimer();
+        _snack('You can resend the code every 30 seconds.');
+      } else {
+        _snack('Resend failed: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Widget _headerCard(String accountText, String subtitle) {
+    return Material(
+      elevation: 10,
+      shadowColor: Colors.black12,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFEAEAF2)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF2563EB), Color(0xFF4F46E5)],
+                ),
+              ),
+              child: const Icon(Icons.verified_outlined, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Verify your account',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Code sent to: $accountText',
+                      style: const TextStyle(color: Colors.black54)),
+                  const SizedBox(height: 6),
+                  Text(subtitle, style: const TextStyle(color: Colors.black54)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _otpBox(int i) {
+    return SizedBox(
+      width: 48,
+      child: TextField(
+        controller: _ctrls[i],
+        focusNode: _nodes[i],
+        enabled: !_isLoading,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 1,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+        decoration: InputDecoration(
+          counterText: "",
+          filled: true,
+          fillColor: const Color(0xFFF6F7FB),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFFEAEAF2)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: Color(0xFF4F46E5), width: 1.6),
+          ),
+        ),
+        onChanged: (v) {
+          if (v.length > 1) {
+            _handlePaste(v);
+            return;
+          }
+
+          final digit = v.replaceAll(RegExp(r'\D'), '');
+          if (digit != v) {
+            _ctrls[i].text = digit;
+            _ctrls[i].selection = TextSelection.fromPosition(
+              TextPosition(offset: _ctrls[i].text.length),
+            );
+          }
+
+          if (digit.isNotEmpty) {
+            if (i < _len - 1) {
+              FocusScope.of(context).requestFocus(_nodes[i + 1]);
+            } else {
+              FocusScope.of(context).unfocus();
+            }
+          } else {
+            if (i > 0) {
+              FocusScope.of(context).requestFocus(_nodes[i - 1]);
+            }
+          }
+
+          if (_code().length == _len) {
+            _submit();
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -104,8 +330,8 @@ class _VerifyScreenState extends State<VerifyScreen> {
         : 'your account';
 
     final subtitle = (_role == 'PROVIDER')
-        ? 'Enter the code to verify your account. Providers require admin approval after verification.'
-        : 'Enter the code to verify your account. After verification, you will be logged in automatically.';
+        ? 'Enter the 6-digit code. Providers require admin approval after verification.'
+        : 'Enter the 6-digit code. After verification, you will be logged in automatically.';
 
     return Scaffold(
       body: Container(
@@ -121,55 +347,9 @@ class _VerifyScreenState extends State<VerifyScreen> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
             child: Column(
               children: [
-                // Header card
-                Material(
-                  elevation: 10,
-                  shadowColor: Colors.black12,
-                  borderRadius: BorderRadius.circular(22),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: const Color(0xFFEAEAF2)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            color: const Color(0xFFEFF6FF),
-                          ),
-                          child: const Icon(Icons.verified_outlined, color: Color(0xFF2563EB)),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Verify your account',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Code sent to: $accountText',
-                                style: const TextStyle(color: Colors.black54),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
+                _headerCard(accountText, subtitle),
                 const SizedBox(height: 14),
 
-                // Body card
                 Expanded(
                   child: Material(
                     elevation: 10,
@@ -186,25 +366,34 @@ class _VerifyScreenState extends State<VerifyScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            subtitle,
-                            style: const TextStyle(color: Colors.black54),
+                          const Text(
+                            'Verification Code',
+                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
 
-                          TextField(
-                            controller: _codeCtrl,
-                            keyboardType: TextInputType.number,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _submit(),
-                            decoration: InputDecoration(
-                              labelText: 'Verification Code',
-                              hintText: 'e.g. 123456',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: List.generate(_len, (i) => _otpBox(i)),
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _resendSec > 0
+                                      ? "Resend available in ${_formatMMSS(_resendSec)}"
+                                      : "Didn’t receive the code?",
+                                  style: const TextStyle(color: Colors.black54),
+                                ),
                               ),
-                            ),
+                              TextButton(
+                                onPressed: (_resendSec > 0 || _isLoading) ? null : _resend,
+                                child: const Text('Resend'),
+                              ),
+                            ],
                           ),
 
                           const Spacer(),
@@ -215,6 +404,8 @@ class _VerifyScreenState extends State<VerifyScreen> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _submit,
                               style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4F46E5),
+                                foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -223,9 +414,15 @@ class _VerifyScreenState extends State<VerifyScreen> {
                                   ? const SizedBox(
                                       width: 22,
                                       height: 22,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
                                     )
-                                  : const Text('Verify & Continue'),
+                                  : const Text(
+                                      'Verify & Continue',
+                                      style: TextStyle(fontWeight: FontWeight.w900),
+                                    ),
                             ),
                           ),
 

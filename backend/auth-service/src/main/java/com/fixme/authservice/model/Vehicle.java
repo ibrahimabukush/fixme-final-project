@@ -34,6 +34,9 @@ public class Vehicle {
 
     public Vehicle() {
     }
+    @Column(nullable = false)
+    private boolean deleted = false;
+
 
     // ====== Getters & Setters ======
     public Long getId() {
@@ -89,4 +92,8 @@ public class Vehicle {
     public VehicleCategory getVehicleCategory() {
         return vehicleCategory;
     }
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
+
 }

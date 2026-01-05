@@ -14,12 +14,13 @@ public class EmailService {
     public void sendVerificationCode(String toEmail, String code) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(toEmail);
-        message.setSubject("FixMe - كود تفعيل الحساب");
+        message.setSubject("FixMe");
         message.setText(
-                "مرحبا,\n\n" +
-                        "كود تفعيل حسابك في FixMe هو: " + code + "\n" +
-                        "الكود صالح لمدة 10 دقائق.\n\n" +
-                        "تحيات فريق FixMe."
+                "Hello,\n\n" +
+                        "Your FixMe account verification code is: " + code + "\n" +
+                        "This code is valid for 10 minutes.\n\n" +
+                        "Best regards,\n" +
+                        "The FixMe Team"
         );
         mailSender.send(message);
     }

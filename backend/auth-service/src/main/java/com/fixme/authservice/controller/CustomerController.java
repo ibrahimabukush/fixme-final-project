@@ -9,10 +9,13 @@ import com.fixme.authservice.service.CustomerRequestService;
 import com.fixme.authservice.service.CustomerService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/customers")
@@ -66,12 +69,28 @@ public class CustomerController {
 
     // حذف سيارة
     @DeleteMapping("/{userId}/vehicles/{vehicleId}")
-    public ResponseEntity<Void> deleteVehicle(
+    public ResponseEntity<?> deleteVehicle(
             @PathVariable Long userId,
             @PathVariable Long vehicleId
     ) {
-        customerService.deleteVehicle(userId, vehicleId);
-        return ResponseEntity.noContent().build();
+        try {
+            customerService.deleteVehicle(userId, vehicleId);
+            return ResponseEntity.noContent().build();
+        } catch (DataIntegrityViolationException ex) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "code", "VEHICLE_HAS_REQUESTS",
+                    "message", "You can’t delete this car because it has service requests."
+            ));
+        } catch (IllegalStateException ex) {
+            // if you still throw VEHICLE_HAS_REQUESTS as IllegalStateException
+            if ("VEHICLE_HAS_ACTIVE_REQUESTS".equals(ex.getMessage())) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "code", "VEHICLE_HAS_ACTIVE_REQUESTS",
+                        "message", "You can’t delete this car because it has service requests."
+                ));
+            }
+            return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
+        }
     }
 
     @GetMapping("/{userId}/providers/nearby")

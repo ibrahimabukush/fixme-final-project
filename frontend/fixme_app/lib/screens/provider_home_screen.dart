@@ -18,18 +18,14 @@ class ProviderHomeScreen extends StatelessWidget {
   void _openProfile(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ProfileScreen(userId: userId),
-      ),
+      MaterialPageRoute(builder: (_) => ProfileScreen(userId: userId)),
     );
   }
 
   void _openBusinessProfile(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ProviderBusinessScreen(userId: userId),
-      ),
+      MaterialPageRoute(builder: (_) => ProviderBusinessScreen(userId: userId)),
     );
   }
 
@@ -45,13 +41,10 @@ class ProviderHomeScreen extends StatelessWidget {
   void _openJobs(BuildContext context) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ProviderJobsScreen(providerId: userId),
-      ),
+      MaterialPageRoute(builder: (_) => ProviderJobsScreen(providerId: userId)),
     );
   }
 
-  // ✅ NEW: History page (DONE jobs)
   void _openHistory(BuildContext context) {
     Navigator.push(
       context,
@@ -64,11 +57,7 @@ class ProviderHomeScreen extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     await AuthService.logout();
     if (!context.mounted) return;
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/login',
-      (route) => false,
-    );
+    Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
   }
 
   Widget _topBar(BuildContext context) {
@@ -170,9 +159,11 @@ class ProviderHomeScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+                    Text(title,
+                        style: const TextStyle(fontWeight: FontWeight.w900)),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(color: Colors.black54)),
+                    Text(subtitle,
+                        style: const TextStyle(color: Colors.black54)),
                   ],
                 ),
               ),
@@ -184,6 +175,58 @@ class ProviderHomeScreen extends StatelessWidget {
     );
   }
 
+  // ✅ Optional: quick stats header (nice UX)
+  Widget _statsRow() {
+    Widget stat(String label, IconData icon) {
+      return Expanded(
+        child: Material(
+          elevation: 6,
+          shadowColor: Colors.black12,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFEAEAF2)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: const Color(0xFFEEF2FF),
+                  ),
+                  child: Icon(icon, color: const Color(0xFF4F46E5), size: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Row(
+      children: [
+        stat("Requests", Icons.assignment_outlined),
+        const SizedBox(width: 10),
+        stat("Jobs", Icons.work_outline),
+        const SizedBox(width: 10),
+        stat("History", Icons.history),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -192,10 +235,7 @@ class ProviderHomeScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFF5F7FF),
-              Color(0xFFFFFBEB),
-            ],
+            colors: [Color(0xFFF5F7FF), Color(0xFFFFFBEB)],
           ),
         ),
         child: SafeArea(
@@ -207,6 +247,9 @@ class ProviderHomeScreen extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(14, 6, 14, 22),
                   child: Column(
                     children: [
+                      _statsRow(),
+                      const SizedBox(height: 12),
+
                       _actionCard(
                         context: context,
                         title: "Business Profile",
@@ -223,8 +266,8 @@ class ProviderHomeScreen extends StatelessWidget {
                         icon: Icons.assignment_outlined,
                         onTap: () => _openNearbyRequests(context),
                       ),
-
                       const SizedBox(height: 10),
+
                       _actionCard(
                         context: context,
                         title: "My Jobs",
@@ -232,9 +275,8 @@ class ProviderHomeScreen extends StatelessWidget {
                         icon: Icons.work_outline,
                         onTap: () => _openJobs(context),
                       ),
-
                       const SizedBox(height: 10),
-                      // ✅ NEW: History
+
                       _actionCard(
                         context: context,
                         title: "History",
@@ -242,8 +284,8 @@ class ProviderHomeScreen extends StatelessWidget {
                         icon: Icons.history,
                         onTap: () => _openHistory(context),
                       ),
-
                       const SizedBox(height: 10),
+
                       _actionCard(
                         context: context,
                         title: "Earnings (Coming Soon)",
@@ -251,12 +293,14 @@ class ProviderHomeScreen extends StatelessWidget {
                         icon: Icons.payments_outlined,
                         onTap: () {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Earnings screen is coming soon.")),
+                            const SnackBar(
+                              content: Text("Earnings screen is coming soon."),
+                            ),
                           );
                         },
                       ),
-
                       const SizedBox(height: 10),
+
                       _actionCard(
                         context: context,
                         title: "My Profile",

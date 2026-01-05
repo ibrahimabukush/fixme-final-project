@@ -28,6 +28,9 @@ public class VerificationToken {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private VerificationType type;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private VerificationPurpose purpose;
 
     @Column(nullable = false)
     private boolean used;
