@@ -21,4 +21,7 @@ public class NearbyProviderResponse {
     private Double longitude;
     private Set<VehicleCategory> categories;
     private Double distanceKm;
+
+
+
 }

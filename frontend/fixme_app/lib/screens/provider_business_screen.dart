@@ -1,6 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import '../services/provider_api.dart';
+
+class DayHours {
+  TimeOfDay open;
+  TimeOfDay close;
+
+  DayHours({required this.open, required this.close});
+}
 
 class ProviderBusinessScreen extends StatefulWidget {
   final int userId;
@@ -17,7 +26,6 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _servicesCtrl = TextEditingController();
-  final _hoursCtrl = TextEditingController();
 
   bool _loading = false;
   bool _loadingBusiness = true;
@@ -68,6 +76,22 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
 
   final Set<String> _selectedServices = {};
 
+  // ✅ Opening Hours Schedule (no typing)
+  final List<String> _days = const ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+  final Map<String, String> _dayLabels = const {
+    "SUN": "Sunday",
+    "MON": "Monday",
+    "TUE": "Tuesday",
+    "WED": "Wednesday",
+    "THU": "Thursday",
+    "FRI": "Friday",
+    "SAT": "Saturday",
+  };
+
+  /// Stores selected working days and their hours
+  /// Format: {"MON": DayHours(...), "TUE": DayHours(...)}
+  final Map<String, DayHours> _schedule = {};
+
   @override
   void initState() {
     super.initState();
@@ -79,7 +103,6 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _servicesCtrl.dispose();
-    _hoursCtrl.dispose();
     super.dispose();
   }
 
@@ -158,6 +181,36 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
     );
   }
 
+  // ---------- Schedule helpers ----------
+  String _two(int n) => n.toString().padLeft(2, '0');
+
+  String _scheduleToJson() {
+    final m = <String, dynamic>{};
+    _schedule.forEach((day, h) {
+      m[day] = {
+        "open": "${_two(h.open.hour)}:${_two(h.open.minute)}",
+        "close": "${_two(h.close.hour)}:${_two(h.close.minute)}",
+      };
+    });
+    return jsonEncode(m);
+  }
+
+  TimeOfDay _parseTime(String s, {TimeOfDay fallback = const TimeOfDay(hour: 9, minute: 0)}) {
+    final parts = s.split(":");
+    if (parts.length != 2) return fallback;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return fallback;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  bool _isCloseBeforeOrEqualOpen(DayHours h) {
+    final openMin = h.open.hour * 60 + h.open.minute;
+    final closeMin = h.close.hour * 60 + h.close.minute;
+    // allow overnight? if you want overnight, return false here
+    return closeMin <= openMin;
+  }
+
   // ---------- Load from backend ----------
   Future<void> _loadBusiness() async {
     setState(() => _loadingBusiness = true);
@@ -168,7 +221,32 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
       _nameCtrl.text = (data['businessName'] ?? '').toString();
       _descCtrl.text = (data['description'] ?? '').toString();
       _servicesCtrl.text = (data['services'] ?? '').toString();
-      _hoursCtrl.text = (data['openingHours'] ?? '').toString();
+
+      // ✅ Parse openingHours JSON (new format)
+      _schedule.clear();
+      final oh = (data['openingHours'] ?? '').toString().trim();
+      if (oh.startsWith('{')) {
+        try {
+          final decoded = jsonDecode(oh);
+          if (decoded is Map) {
+            decoded.forEach((day, range) {
+              if (range is Map) {
+                final open = (range["open"] ?? "09:00").toString();
+                final close = (range["close"] ?? "18:00").toString();
+                final key = day.toString().toUpperCase();
+                if (_dayLabels.containsKey(key)) {
+                  _schedule[key] = DayHours(
+                    open: _parseTime(open, fallback: const TimeOfDay(hour: 9, minute: 0)),
+                    close: _parseTime(close, fallback: const TimeOfDay(hour: 18, minute: 0)),
+                  );
+                }
+              }
+            });
+          }
+        } catch (_) {
+          // old free-text format (ignore)
+        }
+      }
 
       final lat = data['latitude'];
       final lng = data['longitude'];
@@ -292,6 +370,128 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
     });
   }
 
+  // ---------- Opening hours picker ----------
+  Widget _openingHoursPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle("Opening hours", sub: "Select working days, then choose open/close time"),
+        const SizedBox(height: 8),
+
+        ..._days.map((d) {
+          final selected = _schedule.containsKey(d);
+          final h = _schedule[d];
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Switch(
+                      value: selected,
+                      onChanged: _loading
+                          ? null
+                          : (v) {
+                              setState(() {
+                                if (v) {
+                                  _schedule[d] = DayHours(
+                                    open: const TimeOfDay(hour: 9, minute: 0),
+                                    close: const TimeOfDay(hour: 18, minute: 0),
+                                  );
+                                } else {
+                                  _schedule.remove(d);
+                                }
+                              });
+                            },
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _dayLabels[d] ?? d,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    if (selected)
+                      _pill(
+                        "${h!.open.format(context)} - ${h.close.format(context)}",
+                        icon: Icons.access_time,
+                      ),
+                  ],
+                ),
+                if (selected) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _loading
+                              ? null
+                              : () async {
+                                  final t = await showTimePicker(
+                                    context: context,
+                                    initialTime: h!.open,
+                                  );
+                                  if (t != null) {
+                                    setState(() => _schedule[d]!.open = t);
+                                  }
+                                },
+                          child: Text("Open: ${h!.open.format(context)}"),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _loading
+                              ? null
+                              : () async {
+                                  final t = await showTimePicker(
+                                    context: context,
+                                    initialTime: h.close,
+                                  );
+                                  if (t != null) {
+                                    setState(() => _schedule[d]!.close = t);
+                                  }
+                                },
+                          child: Text("Close: ${h.close.format(context)}"),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_isCloseBeforeOrEqualOpen(h))
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: Text(
+                        "Close time must be after open time.",
+                        style: TextStyle(color: Colors.red, fontSize: 12.5),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          );
+        }),
+
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _schedule.isEmpty
+              ? [_pill("No working days selected", icon: Icons.info_outline)]
+              : _schedule.keys
+                  .map((d) => _pill(_dayLabels[d] ?? d, icon: Icons.calendar_month_outlined))
+                  .toList(),
+        ),
+      ],
+    );
+  }
+
   // ---------- Save ----------
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -317,6 +517,23 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
       return;
     }
 
+    if (_schedule.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select at least 1 working day')),
+      );
+      return;
+    }
+
+    // validate schedule times
+    for (final e in _schedule.entries) {
+      if (_isCloseBeforeOrEqualOpen(e.value)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fix opening hours for ${_dayLabels[e.key] ?? e.key}')),
+        );
+        return;
+      }
+    }
+
     setState(() => _loading = true);
 
     try {
@@ -325,7 +542,10 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
         businessName: _nameCtrl.text.trim(),
         description: _descCtrl.text.trim(),
         services: _servicesCtrl.text.trim(),
-        openingHours: _hoursCtrl.text.trim(),
+
+        // ✅ now saved as JSON string
+        openingHours: _scheduleToJson(),
+
         latitude: _lat!,
         longitude: _lng!,
         categories: _selectedCategories.toList(),
@@ -495,7 +715,7 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
                     child: ListView(
                       shrinkWrap: true,
                       children: [
-                        // Header (like your other screens)
+                        // Header
                         Row(
                           children: [
                             Container(
@@ -505,8 +725,10 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
                                 borderRadius: BorderRadius.circular(14),
                                 color: const Color(0xFFEEF2FF),
                               ),
-                              child: const Icon(Icons.storefront_outlined,
-                                  color: Color(0xFF4F46E5)),
+                              child: const Icon(
+                                Icons.storefront_outlined,
+                                color: Color(0xFF4F46E5),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             const Expanded(
@@ -575,18 +797,11 @@ class _ProviderBusinessScreenState extends State<ProviderBusinessScreen> {
                           ),
                           validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                         ),
-                        const SizedBox(height: 12),
-
-                        TextFormField(
-                          controller: _hoursCtrl,
-                          decoration: _dec(
-                            'Opening hours',
-                            Icons.access_time_outlined,
-                            hint: 'Sun-Thu 09:00-18:00',
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                        ),
                         const SizedBox(height: 14),
+
+                        // ✅ Opening hours (picker)
+                        _openingHoursPicker(),
+                        const SizedBox(height: 16),
 
                         // Chips sections
                         _categoryChips(),

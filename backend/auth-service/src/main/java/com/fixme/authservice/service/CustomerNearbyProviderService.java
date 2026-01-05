@@ -7,6 +7,9 @@ import com.fixme.authservice.model.VehicleCategory;
 import com.fixme.authservice.repository.ProviderBusinessRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.fixme.authservice.util.OpeningHoursUtil;
+import java.time.ZoneId;
+
 
 import java.util.Comparator;
 import java.util.List;
@@ -24,6 +27,7 @@ public class CustomerNearbyProviderService {
             double radiusKm,
             VehicleCategory category,
             ServiceType serviceType
+
     ) {
 
         List<ProviderBusiness> all = businessRepository.findByLatitudeNotNullAndLongitudeNotNull();
@@ -43,6 +47,7 @@ public class CustomerNearbyProviderService {
                     if (b.getOfferedServices() == null || b.getOfferedServices().isEmpty()) return false;
                     return b.getOfferedServices().contains(serviceType);
                 })
+                .filter(b -> OpeningHoursUtil.isOpenNow(b.getOpeningHours(), ZoneId.of("Asia/Jerusalem")))
 
                 // distance calc
                 .map(b -> {

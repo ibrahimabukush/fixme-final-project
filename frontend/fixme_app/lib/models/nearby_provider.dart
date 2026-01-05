@@ -7,6 +7,8 @@ class NearbyProvider {
   final double longitude;
   final double distanceKm;
   final List<String> categories;
+  
+
 
   NearbyProvider({
     required this.providerId,
@@ -17,6 +19,7 @@ class NearbyProvider {
     required this.distanceKm,
     required this.categories,
     this.description,
+    
   });
 
   factory NearbyProvider.fromJson(Map<String, dynamic> j) {
